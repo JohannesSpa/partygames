@@ -1,0 +1,13 @@
+# Betriebssystem / OneDrive
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editoren
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log

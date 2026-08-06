@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f4f7">
+  <meta name="description" content="PartyGames – Partyspiele für ein Gerät. Läuft komplett offline im Browser.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>PartyGames</title>
+
+  <meta name="apple-mobile-web-app-title" content="PartyGames">
+  <meta name="application-name" content="PartyGames">
+
+  <!--
+    Icons. Das Web-App-Manifest wird erst von js/core/pwa.js eingehaengt:
+    unter file:// koennte der Browser es nicht laden und wuerde nur eine
+    Fehlermeldung hinterlassen.
+  -->
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/animations.css">
+</head>
+<body>
+  <div id="app">
+    <header id="header"></header>
+    <main id="view"></main>
+  </div>
+
+  <!--
+    Klassische Script-Tags statt ES-Modulen: unter file:// (Doppelklick auf
+    diese Datei) blockiert der Browser Modul-Importe wegen CORS.
+    Die Reihenfolge entspricht den Abhaengigkeiten.
+  -->
+  <script src="js/core/dom.js"></script>
+  <script src="js/core/storage.js"></script>
+  <script src="js/core/store.js"></script>
+  <script src="js/core/settings.js"></script>
+  <script src="js/core/audio.js"></script>
+  <script src="js/core/haptics.js"></script>
+  <script src="js/core/confetti.js"></script>
+  <script src="js/core/registry.js"></script>
+  <script src="js/core/history.js"></script>
+  <script src="js/core/router.js"></script>
+  <script src="js/core/pwa.js"></script>
+
+  <script src="js/ui/icons.js"></script>
+  <script src="js/ui/components.js"></script>
+  <script src="js/ui/header.js"></script>
+  <script src="js/ui/settings-sheet.js"></script>
+
+  <script src="js/games/tara-tara/logic.js"></script>
+  <script src="js/games/tara-tara/state.js"></script>
+  <script src="js/games/tara-tara/wheel.js"></script>
+  <script src="js/games/tara-tara/screens.js"></script>
+  <script src="js/games/tara-tara/game.js"></script>
+
+  <script src="js/screens/stats.js"></script>
+
+  <script src="js/tests.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

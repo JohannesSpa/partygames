@@ -1,0 +1,228 @@
+/* ==========================================================================
+   Animationen
+   Ersatz fuer Framer Motion: CSS-Keyframes + Web Animations API.
+   Alle Bewegungen lassen sich global abschalten:
+     - Nutzer-Einstellung  -> :root[data-motion="off"]
+     - System-Praeferenz   -> prefers-reduced-motion
+   ========================================================================== */
+
+/* --- Seitenuebergaenge -------------------------------------------------- */
+
+@keyframes view-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes view-in-back {
+  from { opacity: 0; transform: translate3d(-14px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes view-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translate3d(0, -10px, 0) scale(.99); }
+}
+
+.view-enter { animation: view-in var(--dur-slow) var(--ease-out) both; }
+.view-enter-back { animation: view-in-back var(--dur-slow) var(--ease-out) both; }
+.view-leave { animation: view-out 160ms var(--ease-out) both; }
+
+/* --- Gestaffeltes Einblenden von Karten -------------------------------- */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.fade-in { animation: fade-up 380ms var(--ease-out) both; }
+
+/* Verzoegerungen fuer Listen (Index als Klasse) */
+.d-0 { animation-delay: 0ms; }
+.d-1 { animation-delay: 55ms; }
+.d-2 { animation-delay: 110ms; }
+.d-3 { animation-delay: 165ms; }
+.d-4 { animation-delay: 220ms; }
+.d-5 { animation-delay: 275ms; }
+.d-6 { animation-delay: 330ms; }
+.d-7 { animation-delay: 385ms; }
+
+/* --- Pop / Zahl-Enthuellung -------------------------------------------- */
+
+@keyframes pop-in {
+  0%   { opacity: 0; transform: scale(.6); }
+  60%  { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.pop-in { animation: pop-in 520ms var(--ease-spring) both; }
+
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.03); }
+}
+
+.pulse { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+/* --- Shake bei ungueltiger Eingabe ------------------------------------- */
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+.shake { animation: shake 380ms var(--ease-out); }
+
+/* --- Toast-Ein-/Ausblenden --------------------------------------------- */
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate3d(0, 22px, 0) scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translate3d(0, 12px, 0) scale(.96); }
+}
+
+.toast { animation: toast-in 320ms var(--ease-spring) both; }
+.toast.is-leaving { animation: toast-out 200ms var(--ease-out) both; }
+
+/* --- Dialog ------------------------------------------------------------ */
+
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-in {
+  from { opacity: 0; transform: translate3d(0, 100%, 0); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sheet-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translate3d(0, 60%, 0); }
+}
+
+.overlay { animation: overlay-in 200ms var(--ease-out) both; }
+.overlay .sheet { animation: sheet-in 360ms var(--ease-spring) both; }
+.overlay.is-leaving { animation: overlay-in 180ms var(--ease-out) reverse both; }
+.overlay.is-leaving .sheet { animation: sheet-out 180ms var(--ease-out) both; }
+
+/* --- Gluecksrad -------------------------------------------------------- */
+
+.wheel {
+  position: relative;
+  width: min(78vw, 320px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  filter: drop-shadow(0 14px 28px rgba(16, 20, 35, .22));
+}
+
+.wheel__svg {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/* Zeiger oben (12 Uhr) */
+.wheel__pointer {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  color: var(--orange-500);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .3));
+  transform-origin: 50% 18%;
+}
+
+@keyframes pointer-tick {
+  0%   { transform: translateX(-50%) rotate(0deg); }
+  35%  { transform: translateX(-50%) rotate(-13deg); }
+  100% { transform: translateX(-50%) rotate(0deg); }
+}
+
+.wheel__pointer.is-ticking { animation: pointer-tick 110ms var(--ease-out); }
+
+/* Nabe in der Mitte */
+.wheel__hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 27%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 4px solid var(--surface);
+  box-shadow: var(--shadow-md), inset 0 0 0 1px var(--border);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  color: var(--text-muted);
+}
+
+.wheel__hub svg { width: 42%; height: auto; }
+
+/* --- Konfetti ---------------------------------------------------------- */
+
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+/* --- Gewinner-Trophaee -------------------------------------------------- */
+
+@keyframes trophy-in {
+  0%   { opacity: 0; transform: scale(.4) rotate(-18deg); }
+  55%  { opacity: 1; transform: scale(1.16) rotate(6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes trophy-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+
+.trophy {
+  font-size: clamp(64px, 22vw, 96px);
+  line-height: 1;
+  animation: trophy-in 720ms var(--ease-spring) both,
+             trophy-float 3.2s ease-in-out 720ms infinite;
+}
+
+/* Verlaufender Farbschimmer auf dem Gewinnernamen */
+@keyframes shimmer { to { background-position: 200% center; } }
+
+.winner-name {
+  background: linear-gradient(90deg, var(--indigo-500), var(--orange-500), var(--indigo-500));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 3.4s linear infinite;
+}
+
+/* --- Bewegung deaktiviert ---------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+:root[data-motion="off"] *,
+:root[data-motion="off"] *::before,
+:root[data-motion="off"] *::after {
+  animation-duration: .001ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .001ms !important;
+}

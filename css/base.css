@@ -1,0 +1,130 @@
+/* ==========================================================================
+   Reset, Grundtypografie und Layout-Primitives
+   Mobile First: der Inhalt ist auf max. 480px begrenzt und zentriert.
+   ========================================================================== */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+h1, h2, h3, h4, p, figure { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+svg { display: block; }
+
+:focus-visible {
+  outline: 3px solid var(--primary-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* --- App-Geruest ------------------------------------------------------- */
+
+#app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(900px 420px at 50% -180px, var(--primary-soft), transparent 70%),
+    var(--bg);
+}
+
+#view {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--s-4) var(--s-4) calc(var(--s-8) + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  flex: 1;
+}
+
+/* Bereich, der den Rest der Hoehe fuellt (fuer vertikal zentrierte Inhalte) */
+.grow { flex: 1; }
+.center-y { display: flex; flex-direction: column; justify-content: center; gap: var(--s-4); }
+.stack { display: flex; flex-direction: column; gap: var(--s-3); }
+.row { display: flex; align-items: center; gap: var(--s-3); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.wrap { flex-wrap: wrap; }
+.text-center { text-align: center; }
+.hidden { display: none !important; }
+
+/* --- Typografie-Hilfsklassen ------------------------------------------- */
+
+.title-xl {
+  font-size: clamp(28px, 8vw, 36px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+}
+
+.title-lg {
+  font-size: clamp(22px, 6vw, 27px);
+  font-weight: 750;
+  letter-spacing: -.015em;
+  line-height: 1.2;
+}
+
+.title-md {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.text-muted { color: var(--text-muted); }
+.text-subtle { color: var(--text-subtle); font-size: 14px; }
+.text-sm { font-size: 14px; }
+.text-bold { font-weight: 700; }
+
+/* Grosse Zahlenanzeige (Ziel, Fehlerwert, ...) */
+.numeric {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+
+.display-number {
+  font-size: clamp(52px, 17vw, 76px);
+  line-height: 1;
+  color: var(--primary);
+}
+
+.display-number .unit {
+  font-size: .38em;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-left: .1em;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
