@@ -149,9 +149,35 @@ Spielstände und Bestenliste liegen weiterhin nur auf dem jeweiligen Gerät.
 
 ### Nach Änderungen am Code
 
-In [`sw.js`](sw.js) `CACHE_VERSION` erhöhen (`'v1'` → `'v2'`) und neu hochladen.
+In [`sw.js`](sw.js) `CACHE_VERSION` erhöhen (`'v3'` → `'v4'`) und neu hochladen.
 Installierte Apps melden sich dann beim nächsten Start mit „Neue Version
 verfügbar". Neue Dateien zusätzlich in die Liste `ASSETS` eintragen.
+
+Zur Kontrolle lässt sich der Service Worker in der Browserkonsole befragen:
+
+```js
+navigator.serviceWorker.getRegistration().then(r => {
+  const c = new MessageChannel();
+  c.port1.onmessage = e => console.log(e.data);
+  (r.waiting || r.active).postMessage({ type: 'VERSION' }, [c.port2]);
+});
+```
+
+Antwort: Version, Anzahl gecachter Dateien und was beim Vorladen fehlgeschlagen ist.
+
+### Wenn die Seite offline geht
+
+Wird das Repo auf **privat** gestellt, schaltet GitHub Pages die Seite ab und
+liefert 404 (Pages für private Repos gibt es nur in bezahlten Plänen).
+Für bereits installierte Apps ist das folgenlos: Der Service Worker liefert
+grundsätzlich zuerst aus dem Cache, und Antworten, die nicht `ok` sind, werden
+**nie** in den Cache übernommen – eine 404-Seite kann die App also nicht
+überschreiben. Nur Neuinstallationen und Updates brauchen die Seite wieder
+öffentlich.
+
+Wer das Repo dauerhaft privat halten will, deployt statt GitHub Pages über
+**Cloudflare Pages** oder **Netlify** – beide bauen auch aus privaten Repos,
+ebenfalls kostenlos.
 
 ## Projektstruktur
 

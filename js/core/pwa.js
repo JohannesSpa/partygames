@@ -146,7 +146,10 @@ PG.pwa = (function () {
       document.head.appendChild(link);
     }
 
-    navigator.serviceWorker.register('sw.js').then(function (reg) {
+    // updateViaCache: 'none' -> sw.js wird nie aus dem HTTP-Cache genommen.
+    // Sonst kann der Browser (z. B. auf GitHub Pages mit max-age) minutenlang
+    // eine veraltete Fassung starten und Updates verschlucken.
+    navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' }).then(function (reg) {
       registration = reg;
 
       reg.addEventListener('updatefound', function () {

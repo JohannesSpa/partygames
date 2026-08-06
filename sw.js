@@ -10,7 +10,7 @@
  * siehe js/core/pwa.js.
  */
 
-var CACHE_VERSION = 'v1';
+var CACHE_VERSION = 'v3';
 var CACHE_NAME = 'partygames-' + CACHE_VERSION;
 
 var ASSETS = [
@@ -58,13 +58,19 @@ var ASSETS = [
 
 /* ------------------------------------------------------------- Installation */
 
+// Merkt sich, was beim Vorladen schiefging - abrufbar ueber die
+// VERSION-Nachricht (siehe unten).
+var failedAssets = [];
+
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
+      failedAssets = [];
       // Einzeln ablegen: eine fehlende Datei soll nicht die ganze
       // Installation scheitern lassen.
       return Promise.all(ASSETS.map(function (url) {
         return cache.add(new Request(url, { cache: 'reload' })).catch(function (err) {
+          failedAssets.push(url + ' (' + (err && err.message ? err.message : err) + ')');
           console.warn('[sw] konnte nicht cachen:', url, err);
         });
       }));
@@ -97,35 +103,36 @@ self.addEventListener('fetch', function (event) {
   if (request.method !== 'GET') return;
   if (new URL(request.url).origin !== self.location.origin) return;
 
-  // Seitenaufrufe: erst Netz (damit Updates ankommen), sonst Cache.
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).then(function (response) {
-        var copy = response.clone();
-        caches.open(CACHE_NAME).then(function (cache) { cache.put(request, copy); });
-        return response;
-      }).catch(function () {
-        return caches.match(request).then(function (cached) {
-          return cached || caches.match('./index.html');
-        });
-      })
-    );
-    return;
-  }
+  var isNavigation = request.mode === 'navigate';
 
-  // Alles andere: erst Cache (schnell und offline), im Hintergrund erneuern.
   event.respondWith(
-    caches.match(request).then(function (cached) {
+    caches.match(request, { ignoreSearch: isNavigation }).then(function (cached) {
+
       var network = fetch(request).then(function (response) {
-        if (response && response.status === 200) {
+        // NUR brauchbare Antworten uebernehmen. Ein 404 - etwa weil die
+        // Seite offline genommen wurde (privates Repo bei GitHub Pages) -
+        // darf den funktionierenden Cache niemals ueberschreiben.
+        if (response && response.ok && response.type === 'basic') {
           var copy = response.clone();
           caches.open(CACHE_NAME).then(function (cache) { cache.put(request, copy); });
         }
         return response;
       }).catch(function () {
-        return cached;
+        return null;
       });
-      return cached || network;
+
+      // Vorhanden? Sofort ausliefern (schneller Start, offline sicher) und
+      // im Hintergrund auffrischen. Neue Fassungen kommen ueber den
+      // Versionswechsel des Service Workers, nicht ueber diesen Weg.
+      if (cached) {
+        event.waitUntil(network);
+        return cached;
+      }
+
+      return network.then(function (response) {
+        if (response) return response;
+        return isNavigation ? caches.match('./index.html') : Response.error();
+      });
     })
   );
 });
@@ -133,5 +140,27 @@ self.addEventListener('fetch', function (event) {
 /* ------------------------------------------------------------------ Update */
 
 self.addEventListener('message', function (event) {
-  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+
+  // Selbstauskunft: welche Fassung laeuft, wie viele Dateien liegen im
+  // Cache, was hat beim Vorladen nicht geklappt.
+  if (event.data && event.data.type === 'VERSION' && event.ports && event.ports[0]) {
+    var port = event.ports[0];
+    caches.open(CACHE_NAME).then(function (cache) {
+      return cache.keys();
+    }).then(function (keys) {
+      port.postMessage({
+        version: CACHE_VERSION,
+        cacheName: CACHE_NAME,
+        cached: keys.length,
+        expected: ASSETS.length,
+        failed: failedAssets
+      });
+    }).catch(function (err) {
+      port.postMessage({ version: CACHE_VERSION, error: String(err) });
+    });
+  }
 });
