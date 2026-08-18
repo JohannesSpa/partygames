@@ -19,7 +19,7 @@ PG.sync = (function () {
   'use strict';
 
   var KEY = 'pg.sync.v1';
-  var DEFAULT_ENDPOINT = 'api/sync';
+  var SAME_ORIGIN_ENDPOINT = 'api/sync';
   var PUSH_LIMIT = 200;          // Datensaetze je Anfrage
   var AUTO_INTERVAL = 20000;     // fruehestens alle 20 s automatisch
   var TIMEOUT = 12000;
@@ -35,11 +35,23 @@ PG.sync = (function () {
 
   /* ------------------------------------------------------------ Einstellung */
 
+  /**
+   * Standardadresse aus js/config.js - dadurch muss sie nur einmal zentral
+   * gepflegt werden und gilt nach dem Veroeffentlichen fuer alle Geraete.
+   */
+  function defaultEndpoint() {
+    var configured = PG.config && PG.config.syncEndpoint;
+    return (configured && String(configured).trim()) || SAME_ORIGIN_ENDPOINT;
+  }
+
   function config() {
     var stored = PG.storage.get(KEY, null) || {};
     return {
       group: stored.group || null,
-      endpoint: stored.endpoint || DEFAULT_ENDPOINT,
+      // Eine geraetespezifische Eingabe hat Vorrang, sonst gilt die
+      // zentrale Einstellung.
+      endpoint: stored.endpointOverride || defaultEndpoint(),
+      endpointOverride: stored.endpointOverride || null,
       lastSeq: stored.lastSeq || 0,
       syncedIds: Array.isArray(stored.syncedIds) ? stored.syncedIds : [],
       lastSyncAt: stored.lastSyncAt || 0,
@@ -334,6 +346,11 @@ PG.sync = (function () {
     mergeSyncedIds: mergeSyncedIds,
     syncNow: syncNow,
     autoSync: autoSync,
-    setEndpoint: function (url) { saveConfig({ endpoint: url }); }
+    defaultEndpoint: defaultEndpoint,
+    /** Leerer Wert = zentrale Einstellung verwenden. */
+    setEndpoint: function (url) {
+      var trimmed = String(url || '').trim();
+      saveConfig({ endpointOverride: trimmed || null });
+    }
   };
 })();

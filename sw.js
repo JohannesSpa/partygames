@@ -10,7 +10,7 @@
  * siehe js/core/pwa.js.
  */
 
-var CACHE_VERSION = 'v5';
+var CACHE_VERSION = 'v6';
 var CACHE_NAME = 'partygames-' + CACHE_VERSION;
 
 var ASSETS = [
@@ -23,6 +23,7 @@ var ASSETS = [
   './css/components.css',
   './css/animations.css',
 
+  './js/config.js',
   './js/core/dom.js',
   './js/core/storage.js',
   './js/core/store.js',

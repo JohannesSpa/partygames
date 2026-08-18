@@ -117,13 +117,13 @@ PG.syncUi = (function () {
     var endpointField = ui.field({
       label: 'Server (optional)',
       placeholder: 'https://…/api/sync',
-      hint: 'Leer lassen, wenn App und Datenbank unter derselben Adresse liegen.',
-      value: current.endpoint === 'api/sync' ? '' : current.endpoint
+      hint: 'Leer lassen – normalerweise ist das schon im Code hinterlegt.',
+      value: current.endpointOverride || ''
     });
 
     function finish(code) {
-      var url = endpointField.value().trim();
-      PG.sync.setEndpoint(url || 'api/sync');
+      // Leeres Feld = zentrale Einstellung aus js/config.js verwenden
+      PG.sync.setEndpoint(endpointField.value());
 
       var result = PG.sync.join(code);
       if (!result.ok) {
