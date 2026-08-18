@@ -244,17 +244,24 @@ PG.taraTara.screens = (function () {
 
     var actionSlot = h('div', { class: 'actions' });
 
+    /** Dreher starten - ausgeloest vom Button ODER vom Rad selbst. */
+    function startSpin() {
+      PG.dom.setContent(actionSlot, ui.button({ label: 'Dreht ...', disabled: true }));
+      PG.haptics.medium();
+      wheel.spin(function (value) { showResult(value); });
+    }
+
     function showSpinButton() {
       PG.dom.setContent(actionSlot, ui.button({
         label: 'Rad drehen',
         variant: 'accent',
         icon: 'zap',
-        onClick: function () {
-          PG.dom.setContent(actionSlot, ui.button({ label: 'Dreht ...', disabled: true }));
-          wheel.spin(function (value) { showResult(value); });
-        }
+        onClick: startSpin
       }));
     }
+
+    // Tippen auf das Rad startet es ebenfalls
+    wheel.onActivate(startSpin);
 
     function showResult(value) {
       PG.dom.setContent(resultBox,
@@ -302,6 +309,8 @@ PG.taraTara.screens = (function () {
         ui.badge(participants.length + ' im Rennen', 'primary', 'users'),
         ui.badge(st.min + '–' + st.max + ' g', null, 'scale')
       ),
+
+      h('div', { class: 'text-subtle text-center', text: 'Tippe auf das Rad oder den Button.' }),
 
       actionSlot
     );

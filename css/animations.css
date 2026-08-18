@@ -115,6 +115,7 @@
   aspect-ratio: 1;
   margin: 0 auto;
   filter: drop-shadow(0 14px 28px rgba(16, 20, 35, .22));
+  transition: transform var(--dur) var(--ease-out);
 }
 
 .wheel__svg {
@@ -164,6 +165,33 @@
 }
 
 .wheel__hub svg { width: 42%; height: auto; }
+
+/* Das Rad ist selbst bedienbar: Tippen startet den Dreher. */
+
+.wheel--ready { cursor: pointer; }
+.wheel--ready:hover { transform: scale(1.02); }
+.wheel--ready:active { transform: scale(.98); }
+
+.wheel--ready:focus-visible {
+  outline: 3px solid var(--primary-ring);
+  outline-offset: 8px;
+  border-radius: 50%;
+}
+
+/* Dezenter Pulsring als Einladung zum Antippen */
+@keyframes wheel-hint {
+  0%        { box-shadow: 0 0 0 0 rgba(249, 115, 22, .45); }
+  70%, 100% { box-shadow: 0 0 0 20px rgba(249, 115, 22, 0); }
+}
+
+.wheel--ready::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: wheel-hint 2.8s ease-out infinite;
+}
 
 /* --- Konfetti ---------------------------------------------------------- */
 

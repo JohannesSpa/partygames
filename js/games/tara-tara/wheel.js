@@ -135,12 +135,30 @@ PG.taraTara.wheel = (function () {
     var hub = h('div', { class: 'wheel__hub' }, PG.icons.el('gauge', 30));
 
     var el = h('div', {
-      class: 'wheel',
-      role: 'img',
-      'aria-label': 'Glücksrad von ' + layout.min + ' bis ' + layout.max + ' Gramm'
+      class: 'wheel wheel--ready',
+      role: 'button',
+      tabindex: '0',
+      'aria-label': 'Glücksrad von ' + layout.min + ' bis ' + layout.max +
+                    ' Gramm – antippen zum Drehen'
     }, disc, pointer, hub);
 
     var spinning = false;
+    var used = false;          // nach dem Dreher ist Schluss
+    var activateHandler = null;
+
+    /** Klick oder Tastendruck auf dem Rad selbst. */
+    function activate() {
+      if (spinning || used || !activateHandler) return;
+      activateHandler();
+    }
+
+    el.addEventListener('click', activate);
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+        ev.preventDefault();
+        activate();
+      }
+    });
 
     /** Hebt das getroffene Segment hervor. */
     function markHit(index) {
@@ -157,8 +175,12 @@ PG.taraTara.wheel = (function () {
      * @param {(value: number) => void} done
      */
     function spin(done) {
-      if (spinning) return;
+      if (spinning || used) return;
       spinning = true;
+      used = true;
+      el.classList.remove('wheel--ready');
+      el.setAttribute('tabindex', '-1');
+      el.setAttribute('aria-disabled', 'true');
 
       var index = L.pickWheelIndex(layout);
       var value = layout.min + index;
@@ -220,6 +242,11 @@ PG.taraTara.wheel = (function () {
       el: el,
       spin: spin,
       layout: layout,
+      /**
+       * Legt fest, was ein Klick bzw. Tastendruck auf dem Rad ausloest.
+       * @param {Function} fn
+       */
+      onActivate: function (fn) { activateHandler = fn; },
       isSpinning: function () { return spinning; }
     };
   }
