@@ -1,0 +1,34 @@
+{
+  // Konfiguration fuer den Betrieb als Cloudflare Worker.
+  //
+  // Cloudflare liest diese Datei bei jedem Deployment aus dem Repository.
+  // Sie ist damit die massgebliche Quelle: Bindungen, die nur im Dashboard
+  // eingetragen sind, werden beim naechsten Deployment verworfen. Deshalb
+  // steht die Datenbank hier drin und nicht nur in der Oberflaeche.
+
+  "name": "partygames",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-09-01",
+
+  // Die App liegt im Wurzelverzeichnis; der Worker springt nur ein, wenn
+  // keine passende Datei existiert (also fuer /api/sync).
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS"
+  },
+
+  // Datenbank fuer die gemeinsame Bestenliste.
+  // database_id findest du im Cloudflare-Dashboard unter
+  // Storage & Databases -> D1 -> partygames (Feld "Database ID").
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "partygames",
+      "database_id": "dbba7335-195b-4b3d-bd88-a905f22701bb"
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}
