@@ -72,20 +72,19 @@ bester/schlechtester Wurf, Rundensiege, verdiente und eingelöste Kronen,
 perfekte Treffer, Stichrunden, aktuelle und längste Siegesserie sowie die
 letzten Spiele.
 
-### Ergebnisse von mehreren Geräten zusammenführen
+Spieler werden über ihren Namen erkannt, unabhängig von Groß- und
+Kleinschreibung: „Anna", „anna" und „ANNA" sind dieselbe Person.
 
-Noch gibt es keinen Server – aber die Daten sind schon dafür vorbereitet
-(Spieler werden über ihren Namen identifiziert, jedes Spiel hat eine
-eindeutige id):
+### Ergebnisse ohne Server austauschen
+
+Auch ohne Datenbank lassen sich Ergebnisse zusammenführen:
 
 - **Teilen** exportiert alle Ergebnisse als JSON – als Datei oder über die
   Zwischenablage.
 - **Importieren** führt fremde Ergebnisse mit den eigenen zusammen; bereits
   bekannte Spiele werden anhand ihrer id übersprungen.
 
-So sehen Freunde von verschiedenen Orten eine gemeinsame Bestenliste. Später
-muss nur der Transportweg durch eine API ersetzt werden – das Datenmodell
-bleibt gleich.
+Bequemer geht es mit dem automatischen Abgleich – siehe unten.
 
 ## Features
 
@@ -97,6 +96,7 @@ bleibt gleich.
 - Bestenliste über Tag / Monat / Jahr / Gesamt mit Spielerprofilen
 - Auszeichnungen am Spielende
 - Export/Import der Ergebnisse zum Zusammenführen mehrerer Geräte
+- Gemeinsame Bestenliste über mehrere Handys (Gruppencode, konfliktfreier Abgleich)
 - Als App installierbar (PWA) und nach dem ersten Aufruf komplett offline
 - Dark Mode (hell / dunkel / System)
 - Laufendes Spiel wird automatisch gespeichert und kann fortgesetzt werden
@@ -179,6 +179,70 @@ Wer das Repo dauerhaft privat halten will, deployt statt GitHub Pages über
 **Cloudflare Pages** oder **Netlify** – beide bauen auch aus privaten Repos,
 ebenfalls kostenlos.
 
+## Gemeinsame Bestenliste (mehrere Handys)
+
+Jedes Handy behaelt seine eigenen Daten - zusaetzlich koennen sich alle ueber
+einen **Gruppencode** auf eine gemeinsame Bestenliste einigen. Wer den Code
+kennt, sieht die Ergebnisse der Gruppe und steuert eigene bei. Kein Konto,
+kein Passwort.
+
+Der Abgleich ist konfliktfrei: Ergebnisse sind unveraenderlich und tragen eine
+eindeutige id. Abgleichen heisst schlicht "Neues hinschicken, Neues abholen" -
+ein abgebrochener Versuch darf gefahrlos wiederholt werden. Die App bleibt
+offline-first; ohne Netz aendert sich nichts, der Rueckstand wird nachgeholt.
+
+Abgeglichen wird automatisch beim Start, nach jedem beendeten Spiel und beim
+Oeffnen der Bestenliste (gedrosselt), ausserdem jederzeit ueber *Abgleichen*.
+
+### Einrichten (einmalig, kostenlos)
+
+Gebraucht wird ein Cloudflare-Konto. Alles laesst sich im Browser erledigen -
+Node.js oder `wrangler` sind **nicht** noetig.
+
+1. **Datenbank anlegen**: Cloudflare-Dashboard -> *Storage & Databases* -> *D1*
+   -> *Create database*, Name z. B. `partygames`.
+2. **Schema einspielen**: die Datenbank oeffnen -> Reiter *Console* -> den
+   Inhalt von [`schema.sql`](schema.sql) einfuegen und ausfuehren.
+3. **Seite veroeffentlichen**: *Workers & Pages* -> *Create* -> *Pages*.
+   Entweder das GitHub-Repo verbinden (private Repos gehen auch) oder den
+   Ordner direkt hochladen. Als Build-Einstellung: **kein** Build-Befehl,
+   Ausgabeverzeichnis `/`.
+4. **Datenbank verbinden**: im Pages-Projekt -> *Settings* -> *Functions* ->
+   *D1 database bindings* -> Variablenname **`DB`**, Datenbank `partygames`.
+5. **Einmal neu veroeffentlichen** - Bindungen greifen erst mit dem naechsten
+   Deployment.
+6. In der App: *Bestenliste* -> *Einrichten* -> *Neue Gruppe erstellen*, dann
+   den Code oder den Einladungslink an die Mitspieler geben.
+
+Der Ordner `functions/` wird ausschliesslich von Cloudflare Pages ausgewertet.
+Auf GitHub Pages oder unter `file://` liegt er einfach ungenutzt herum.
+
+### App auf GitHub Pages, Datenbank bei Cloudflare
+
+Geht auch: Pages-Projekt nur mit dem Ordner `functions/` veroeffentlichen und
+in der App unter *Bestenliste -> Einrichten* im Feld **Server** die volle
+Adresse eintragen, z. B. `https://partygames.pages.dev/api/sync`. Die Function
+erlaubt fremde Herkunft (CORS).
+
+### Lokal ausprobieren
+
+Ein Test-Server bildet die Cloudflare-Function mit SQLite nach:
+
+```bash
+py -3 tools/mock-sync-server.py 8777
+```
+
+Dann `http://localhost:8777` oeffnen - `/api/sync` verhaelt sich wie in der
+Cloud. Die Datei `tools/mock-sync.sqlite` entsteht dabei und ist nur Beiwerk.
+
+### Was auf dem Server liegt
+
+Nur das, was auch in der Bestenliste steht: Spitznamen, Platzierungen und
+Kennzahlen je Spiel. Keine Konten, keine E-Mail-Adressen, keine Geraetedaten.
+Wer den Gruppencode hat, kann diese Ergebnisse lesen und eigene beisteuern -
+fuer eine Partybestenliste angemessen, fuer Sensibles ausdruecklich nicht.
+Der Code sollte lang genug bleiben, damit ihn niemand errraet.
+
 ## Projektstruktur
 
 ```
@@ -186,6 +250,9 @@ index.html                  lädt alle Skripte in Abhängigkeitsreihenfolge
 manifest.webmanifest        Name, Farben, Icons – macht die Seite installierbar
 sw.js                       Service Worker: cached alles für den Offline-Betrieb
 icons/                      App-Icons (32 / 180 / 192 / 512 px)
+functions/api/sync.js       Cloudflare Pages Function für den Abgleich
+schema.sql                  Tabellen für die D1-Datenbank
+tools/mock-sync-server.py   Test-Server, der die Function lokal nachbildet
 css/
   tokens.css                Design-Tokens (Farben, Abstände, Schatten), Light + Dark
   base.css                  Reset, Typografie, Layout-Primitives
@@ -202,6 +269,7 @@ js/
     haptics.js              navigator.vibrate
     confetti.js             Canvas-Konfetti
     history.js              Ergebnis-Historie, Aggregation, Export/Import
+    sync.js                 Abgleich der Historie ueber mehrere Geraete
     pwa.js                  Service-Worker-Registrierung, Installation, Updates
     registry.js             Spiel-Registry  ← Erweiterungspunkt
   ui/
@@ -218,6 +286,7 @@ js/
       game.js               Registrierung in der Registry
   screens/
     stats.js                Bestenliste, Spielerprofile, Export/Import
+    sync-ui.js              Gruppe einrichten, einladen, Abgleich ausloesen
   tests.js                  Selbsttest der Spiellogik
   app.js                    Bootstrap + Startseite
 ```
@@ -250,8 +319,8 @@ Code muss nichts geändert werden.
 
 `index.html?selftest=1` aufrufen (oder in der Konsole `PG.tests.run()`).
 Getestet werden Bewertung, Validierung, Zugreihenfolge, Radaufteilung,
-Rundenauswertung, Stichrunde, Kronen, Auszeichnungen, Revanche sowie die
-Aggregation der Gesamtstatistik – 97 Prüfungen. Das Ergebnis erscheint als
+Rundenauswertung, Stichrunde, Kronen, Auszeichnungen, Revanche, die Aggregation der
+Gesamtstatistik sowie die Bausteine des Abgleichs – 121 Prüfungen. Das Ergebnis erscheint als
 Dialog und in der Konsole; gespeicherte Spielstände werden dabei nicht
 verändert.
 

@@ -64,6 +64,19 @@ PG.history = (function () {
     };
   }
 
+  /* -------------------------------------------------------- Spielernamen */
+
+  /**
+   * Vereinheitlicht einen Spielernamen zu einem Schluessel.
+   * "  Anna ", "anna" und "ANNA" sind damit dieselbe Person - wichtig,
+   * sobald Ergebnisse von mehreren Geraeten zusammenkommen.
+   * @param {string} name
+   * @returns {string}
+   */
+  function normalizeName(name) {
+    return String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
   /* ------------------------------------------------------------ Zeitraum */
 
   var PERIODS = [
@@ -155,7 +168,11 @@ PG.history = (function () {
       var fieldSize = game.players.length;
 
       game.players.forEach(function (p) {
-        var row = byName[p.name] || (byName[p.name] = emptyRow(p.name));
+        var key = normalizeName(p.name);
+        var row = byName[key] || (byName[key] = emptyRow(p.name));
+
+        // Anzeigename: die Schreibweise aus dem juengsten Spiel gewinnt.
+        if (game.finishedAt >= row.lastPlayed) row.name = p.name;
 
         row.games += 1;
         row.rounds += p.rounds || 0;
@@ -255,8 +272,9 @@ PG.history = (function () {
 
   /** Die letzten Spiele eines Spielers (neueste zuerst). */
   function recentGamesOf(name, limit) {
+    var key = normalizeName(name);
     return all().filter(function (g) {
-      return g.players.some(function (p) { return p.name === name; });
+      return g.players.some(function (p) { return normalizeName(p.name) === key; });
     }).sort(function (a, b) { return b.finishedAt - a.finishedAt; }).slice(0, limit || 5);
   }
 
@@ -278,6 +296,43 @@ PG.history = (function () {
    * @param {string} json
    * @returns {{ok: boolean, added?: number, skipped?: number, error?: string}}
    */
+  /**
+   * Prueft, ob ein Datensatz brauchbar aussieht.
+   * @param {*} record
+   */
+  function isValidRecord(record) {
+    return !!(record && typeof record.id === 'string' && record.id &&
+              Array.isArray(record.players) && record.players.length &&
+              typeof record.finishedAt === 'number' && record.finishedAt > 0);
+  }
+
+  /**
+   * Fuehrt fremde Datensaetze mit den eigenen zusammen.
+   * Dubletten werden anhand der Spiel-id erkannt - dadurch ist das
+   * Zusammenfuehren beliebig oft wiederholbar (wichtig fuer die
+   * Synchronisation, die einen Abbruch einfach neu versuchen darf).
+   * @param {Array} incoming
+   * @returns {{added: number, skipped: number}}
+   */
+  function mergeRecords(incoming) {
+    if (!Array.isArray(incoming) || !incoming.length) return { added: 0, skipped: 0 };
+
+    var games = all();
+    var known = {};
+    games.forEach(function (g) { known[g.id] = true; });
+
+    var added = 0, skipped = 0;
+    incoming.forEach(function (record) {
+      if (!isValidRecord(record) || known[record.id]) { skipped += 1; return; }
+      known[record.id] = true;
+      games.push(record);
+      added += 1;
+    });
+
+    if (added) save(games.sort(function (a, b) { return a.finishedAt - b.finishedAt; }));
+    return { added: added, skipped: skipped };
+  }
+
   function importJson(json) {
     var parsed;
     try {
@@ -290,24 +345,8 @@ PG.history = (function () {
       : (Array.isArray(parsed) ? parsed : null);
     if (!incoming) return { ok: false, error: 'Keine Spieldaten gefunden.' };
 
-    var games = all();
-    var known = {};
-    games.forEach(function (g) { known[g.id] = true; });
-
-    var added = 0, skipped = 0;
-    incoming.forEach(function (record) {
-      if (!record || !record.id || !Array.isArray(record.players) || !record.finishedAt) {
-        skipped += 1;
-        return;
-      }
-      if (known[record.id]) { skipped += 1; return; }
-      known[record.id] = true;
-      games.push(record);
-      added += 1;
-    });
-
-    if (added) save(games.sort(function (a, b) { return a.finishedAt - b.finishedAt; }));
-    return { ok: true, added: added, skipped: skipped };
+    var result = mergeRecords(incoming);
+    return { ok: true, added: result.added, skipped: result.skipped };
   }
 
   return {
@@ -317,6 +356,9 @@ PG.history = (function () {
     all: all,
     add: add,
     clear: clear,
+    normalizeName: normalizeName,
+    isValidRecord: isValidRecord,
+    mergeRecords: mergeRecords,
     subscribe: subscribe,
     periodStart: periodStart,
     periodLabel: periodLabel,

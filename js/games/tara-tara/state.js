@@ -429,6 +429,9 @@ PG.taraTara.state = (function () {
     var winner = L.findPlayer(state.players, state.winnerId);
 
     return {
+      // Formatversion des Datensatzes - erleichtert spaetere Aenderungen,
+      // wenn Ergebnisse schon auf mehreren Geraeten liegen.
+      v: 1,
       id: state.gameId || newGameId(),
       game: 'tara-tara',
       gameName: 'Tara Tara',
@@ -441,6 +444,8 @@ PG.taraTara.state = (function () {
       players: stats.map(function (s) {
         return {
           name: s.name,
+          // Vereinheitlichter Schluessel: "Anna" und "anna" sind dieselbe Person
+          nameKey: PG.history.normalizeName(s.name),
           placement: s.placement,
           rounds: s.rounds,
           totalError: s.totalError,

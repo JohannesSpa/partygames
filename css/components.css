@@ -767,6 +767,26 @@
   resize: vertical;
 }
 
+/* --- Gruppencode ------------------------------------------------------- */
+
+.group-code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--primary);
+  word-break: break-all;
+}
+
+.group-code--lg {
+  font-size: clamp(20px, 6vw, 26px);
+  padding: var(--s-3) var(--s-4);
+  margin-top: var(--s-2);
+  border-radius: var(--r-md);
+  background: var(--primary-soft);
+  border: 1px dashed color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
 /* --- Kronen ------------------------------------------------------------ */
 
 .crown-badge {

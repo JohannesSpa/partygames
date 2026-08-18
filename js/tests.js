@@ -257,12 +257,68 @@ PG.tests = (function () {
     eq('Import: ungueltiges JSON wird abgefangen', H.importJson('kein json').ok, false);
     eq('Import: leere Liste ist gueltig', H.importJson('{"games":[]}').added, 0);
 
+    /* --- Namensvereinheitlichung --------------------------------------- */
+    eq('Name: Gross- und Kleinschreibung egal', H.normalizeName('Anna'), H.normalizeName('anna'));
+    eq('Name: Leerzeichen werden getrimmt', H.normalizeName('  Tom  '), 'tom');
+    eq('Name: mehrfache Leerzeichen', H.normalizeName('Max   Muster'), 'max muster');
+
+    var mixedCase = H.summarize([
+      { id: 'm1', game: 'tara-tara', finishedAt: 1000, winner: 'Anna', players: [
+        { name: 'Anna', placement: 1, rounds: 1, totalError: 2, best: 2, worst: 2,
+          roundWins: 1, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 },
+        { name: 'Tom', placement: 2, rounds: 1, totalError: 8, best: 8, worst: 8,
+          roundWins: 0, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 }
+      ] },
+      { id: 'm2', game: 'tara-tara', finishedAt: 2000, winner: 'ANNA', players: [
+        { name: 'ANNA', placement: 1, rounds: 1, totalError: 4, best: 4, worst: 4,
+          roundWins: 1, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 },
+        { name: 'tom', placement: 2, rounds: 1, totalError: 6, best: 6, worst: 6,
+          roundWins: 0, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 }
+      ] }
+    ]);
+    eq('Statistik: unterschiedliche Schreibweisen sind eine Person', mixedCase.players.length, 2);
+    var annaRow = mixedCase.players.filter(function (p) { return H.normalizeName(p.name) === 'anna'; })[0];
+    eq('Statistik: beide Spiele gezaehlt', annaRow.games, 2);
+    eq('Statistik: juengste Schreibweise gewinnt', annaRow.name, 'ANNA');
+
+    /* --- Zusammenfuehren ------------------------------------------------ */
+    var sample = [
+      { id: 's1', game: 'tara-tara', finishedAt: 1000, players: [{ name: 'A', placement: 1 }] },
+      { id: 's2', game: 'tara-tara', finishedAt: 2000, players: [{ name: 'B', placement: 1 }] }
+    ];
+    eq('Datensatz-Pruefung: gueltig', H.isValidRecord(sample[0]), true);
+    eq('Datensatz-Pruefung: ohne id ungueltig', H.isValidRecord({ finishedAt: 1, players: [{}] }), false);
+    eq('Datensatz-Pruefung: ohne Spieler ungueltig',
+      H.isValidRecord({ id: 'x', finishedAt: 1, players: [] }), false);
+    eq('Zusammenfuehren: leere Liste', H.mergeRecords([]).added, 0);
+
+    /* --- Abgleich: Auswahl der noch offenen Datensaetze ------------------ */
+    eq('Sync: alles offen', PG.sync.selectUnsynced(sample, []).length, 2);
+    eq('Sync: bereits bestaetigte werden ausgelassen',
+      PG.sync.selectUnsynced(sample, ['s1']).map(function (g) { return g.id; }), ['s2']);
+    eq('Sync: nichts mehr offen', PG.sync.selectUnsynced(sample, ['s1', 's2']).length, 0);
+    eq('Sync: Obergrenze wird beachtet', PG.sync.selectUnsynced(sample, [], 1).length, 1);
+    eq('Sync: bestaetigte ids ohne Dubletten',
+      PG.sync.mergeSyncedIds(['a', 'b'], ['b', 'c']), ['a', 'b', 'c']);
+
+    /* --- Abgleich: Gruppencode ------------------------------------------ */
+    eq('Code: leer ist ungueltig', PG.sync.validateCode('').ok, false);
+    eq('Code: zu kurz ist ungueltig', PG.sync.validateCode('AB1').ok, false);
+    eq('Code: Sonderzeichen sind ungueltig', PG.sync.validateCode('PARTY_1234').ok, false);
+    eq('Code: wird gross geschrieben', PG.sync.validateCode(' party-abcd ').code, 'PARTY-ABCD');
+    check('Code: erzeugter Code ist gueltig', PG.sync.validateCode(PG.sync.generateCode()).ok);
+    check('Code: zwei Codes unterscheiden sich', PG.sync.generateCode() !== PG.sync.generateCode());
+
     /* --- Ergebnis-Datensatz -------------------------------------------- */
     var record = S.buildRecord(st);
     eq('Datensatz: Spieler enthalten', record.players.length, 4);
     eq('Datensatz: Sieger vermerkt', record.winner, L.findPlayer(st.players, st.winnerId).name);
     check('Datensatz: nur Namen, keine internen ids',
       record.players.every(function (p) { return !p.id; }));
+    eq('Datensatz: Formatversion gesetzt', record.v, 1);
+    check('Datensatz: vereinheitlichter Namensschluessel dabei',
+      record.players.every(function (p) { return p.nameKey === H.normalizeName(p.name); }));
+    eq('Datensatz: wird als gueltig erkannt', H.isValidRecord(record), true);
 
     return report();
   }

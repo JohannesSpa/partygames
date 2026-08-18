@@ -346,6 +346,32 @@ PG.ui = (function () {
     return dlg;
   }
 
+  /* ---------------------------------------------------------- Zwischenablage */
+
+  /**
+   * Kopiert Text in die Zwischenablage.
+   * Unter file:// gibt es keinen sicheren Kontext - dann greift der
+   * aeltere Weg ueber ein verstecktes Textfeld.
+   * @returns {Promise<boolean>}
+   */
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text)
+        .then(function () { return true; }, function () { return false; });
+    }
+    try {
+      var area = h('textarea', { style: { position: 'fixed', opacity: '0', top: '0' } });
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(area);
+      return Promise.resolve(ok);
+    } catch (err) {
+      return Promise.resolve(false);
+    }
+  }
+
   /* ------------------------------------------------------------- Leerstelle */
 
   function empty(opts) {
@@ -370,6 +396,7 @@ PG.ui = (function () {
     toast: toast,
     dialog: dialog,
     confirmDialog: confirmDialog,
-    empty: empty
+    empty: empty,
+    copyToClipboard: copyToClipboard
   };
 })();

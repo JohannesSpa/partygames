@@ -745,6 +745,8 @@ PG.taraTara.screens = (function () {
         if (!st.recorded) {
           PG.history.add(S.buildRecord(st));
           S.store.dispatch({ type: 'markRecorded' });
+          // Frisches Ergebnis gleich in die gemeinsame Bestenliste schieben.
+          PG.sync.autoSync();
         }
       }
     };

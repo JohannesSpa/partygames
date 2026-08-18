@@ -215,6 +215,13 @@
       if (PG.router.current() === 'home') PG.router.refresh({ skipAnimation: true });
     });
 
+    // Gemeinsame Bestenliste: Einladungslink auswerten und im Hintergrund
+    // abgleichen. Ohne eingerichtete Gruppe passiert hier nichts.
+    PG.sync.init();
+    PG.sync.onChange(function () {
+      if (PG.router.current() === 'stats') PG.router.refresh({ skipAnimation: true });
+    });
+
     // Selbsttest der Spiellogik: index.html?selftest=1
     if (/[?&]selftest=1/.test(window.location.search) && PG.tests) {
       PG.tests.run();

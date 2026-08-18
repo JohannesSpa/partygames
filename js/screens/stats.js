@@ -114,7 +114,9 @@ PG.statsScreen = (function () {
       recent.length ? h('div', { class: 'stack' },
         h('div', { class: 'eyebrow', text: 'Letzte Spiele' }),
         h('ul', { class: 'stack' }, recent.map(function (game) {
-          var me = game.players.filter(function (p) { return p.name === row.name; })[0];
+          var me = game.players.filter(function (p) {
+            return H.normalizeName(p.name) === H.normalizeName(row.name);
+          })[0];
           return h('li', { class: 'detail-list__row' },
             h('span', { class: 'text-sm', text: relativeDay(game.finishedAt) + ' · ' + game.gameName }),
             h('span', { class: 'badge ' + (me.placement === 1 ? 'badge--success' : ''),
@@ -132,24 +134,6 @@ PG.statsScreen = (function () {
   }
 
   /* ----------------------------------------------------- Export/Import */
-
-  function copyToClipboard(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
-    }
-    // Fallback fuer file:// (kein sicherer Kontext)
-    try {
-      var area = h('textarea', { style: { position: 'fixed', opacity: '0' } });
-      area.value = text;
-      document.body.appendChild(area);
-      area.select();
-      var ok = document.execCommand('copy');
-      document.body.removeChild(area);
-      return Promise.resolve(ok);
-    } catch (err) {
-      return Promise.resolve(false);
-    }
-  }
 
   function downloadJson(text) {
     try {
@@ -197,7 +181,7 @@ PG.statsScreen = (function () {
         ui.button({
           label: 'Text kopieren', icon: 'check',
           onClick: function () {
-            copyToClipboard(json).then(function (ok) {
+            ui.copyToClipboard(json).then(function (ok) {
               ui.toast(ok ? 'In die Zwischenablage kopiert' : 'Kopieren nicht möglich – Text markieren',
                 ok ? { icon: 'check', variant: 'success' } : { variant: 'danger', icon: 'alert' });
             });
@@ -350,6 +334,8 @@ PG.statsScreen = (function () {
           text: 'Wer performt am besten? Alle Ergebnisse aus euren Spielen.' })
       ),
 
+      PG.syncUi.card(),
+
       ui.segmented({
         value: period,
         options: H.PERIODS.map(function (p) { return { value: p.id, label: p.label }; }),
@@ -388,7 +374,9 @@ PG.statsScreen = (function () {
 
     return {
       title: 'Bestenliste',
-      node: node
+      node: node,
+      // Beim Öffnen still im Hintergrund abgleichen (gedrosselt).
+      onMount: function () { PG.sync.autoSync(); }
     };
   }
 
