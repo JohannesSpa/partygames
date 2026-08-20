@@ -215,12 +215,13 @@ PG.syncUi = (function () {
 
       h('div', { class: state === 'error' ? 'field__error' : 'text-subtle', text: statusText }),
 
+      ui.button({
+        label: 'Abgleichen', variant: 'primary', size: 'sm', icon: 'rotate',
+        disabled: state === 'syncing',
+        onClick: runSync
+      }),
+
       h('div', { class: 'row', style: { gap: '8px' } },
-        ui.button({
-          label: 'Abgleichen', variant: 'primary', size: 'sm', icon: 'rotate',
-          disabled: state === 'syncing',
-          onClick: runSync
-        }),
         ui.button({ label: 'Einladen', size: 'sm', icon: 'users', onClick: inviteDialog }),
         ui.button({
           label: 'Verlassen', variant: 'ghost', size: 'sm', icon: 'logOut',
