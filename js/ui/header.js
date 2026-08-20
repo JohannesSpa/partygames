@@ -17,10 +17,14 @@ PG.header = (function () {
     inner = h('div', { class: 'app-header__inner' });
     root.appendChild(inner);
 
-    // Feine Trennlinie einblenden, sobald gescrollt wird.
-    window.addEventListener('scroll', function () {
-      root.classList.toggle('is-scrolled', window.scrollY > 4);
-    }, { passive: true });
+    // Feine Trennlinie einblenden, sobald der Inhalt gerollt wird.
+    // Gerollt wird #view, nicht das Fenster - siehe css/base.css.
+    var view = document.getElementById('view');
+    if (view) {
+      view.addEventListener('scroll', function () {
+        root.classList.toggle('is-scrolled', view.scrollTop > 4);
+      }, { passive: true });
+    }
   }
 
   /**

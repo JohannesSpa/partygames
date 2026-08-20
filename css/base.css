@@ -43,8 +43,15 @@ svg { display: block; }
 
 /* --- App-Geruest ------------------------------------------------------- */
 
+/*
+ * Fester Rahmen statt scrollender Seite: #app ist genau so hoch wie das
+ * Fenster und rollt selbst nie. Nur der Inhaltsbereich rollt - und auch
+ * nur dann, wenn er tatsaechlich zu lang ist. Dadurch "wackelt" nichts
+ * mehr, wenn auf dem Handy die Adressleiste ein- und ausfaehrt.
+ */
 #app {
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background:
@@ -54,11 +61,15 @@ svg { display: block; }
 
 #view {
   flex: 1;
+  min-height: 0;              /* erlaubt dem Bereich zu schrumpfen */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   position: relative;
   width: 100%;
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: var(--s-4) var(--s-4) calc(var(--s-8) + env(safe-area-inset-bottom, 0px));
+  padding: var(--s-4) var(--s-4) calc(var(--s-6) + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
 }
