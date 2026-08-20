@@ -10,7 +10,7 @@
  * siehe js/core/pwa.js.
  */
 
-var CACHE_VERSION = 'v6';
+var CACHE_VERSION = 'v7';
 var CACHE_NAME = 'partygames-' + CACHE_VERSION;
 
 var ASSETS = [
@@ -65,6 +65,34 @@ var ASSETS = [
 // VERSION-Nachricht (siehe unten).
 var failedAssets = [];
 
+/**
+ * Laedt eine Datei frisch und legt sie ab.
+ *
+ * Wichtig: Antworten, die aus einer Umleitung stammen, werden als Kopie
+ * ohne dieses Merkmal gespeichert. Eine umgeleitete Antwort darf der
+ * Browser beim Start einer installierten App nicht verwenden - er bricht
+ * sonst mit einem Netzwerkfehler ab. Cloudflare leitet z. B. /index.html
+ * grundsaetzlich auf / um.
+ */
+function cacheFresh(cache, url) {
+  return fetch(new Request(url, { cache: 'reload' })).then(function (response) {
+    if (!response || !response.ok) {
+      throw new Error('HTTP ' + (response ? response.status : '?'));
+    }
+    return cache.put(url, stripRedirect(response));
+  });
+}
+
+/** Entfernt das Umleitungs-Merkmal, indem der Rumpf neu verpackt wird. */
+function stripRedirect(response) {
+  if (!response.redirected) return response;
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
+
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
@@ -72,7 +100,7 @@ self.addEventListener('install', function (event) {
       // Einzeln ablegen: eine fehlende Datei soll nicht die ganze
       // Installation scheitern lassen.
       return Promise.all(ASSETS.map(function (url) {
-        return cache.add(new Request(url, { cache: 'reload' })).catch(function (err) {
+        return cacheFresh(cache, url).catch(function (err) {
           failedAssets.push(url + ' (' + (err && err.message ? err.message : err) + ')');
           console.warn('[sw] konnte nicht cachen:', url, err);
         });
@@ -116,7 +144,7 @@ self.addEventListener('fetch', function (event) {
         // Seite offline genommen wurde (privates Repo bei GitHub Pages) -
         // darf den funktionierenden Cache niemals ueberschreiben.
         if (response && response.ok && response.type === 'basic') {
-          var copy = response.clone();
+          var copy = stripRedirect(response.clone());
           caches.open(CACHE_NAME).then(function (cache) { cache.put(request, copy); });
         }
         return response;
@@ -134,7 +162,11 @@ self.addEventListener('fetch', function (event) {
 
       return network.then(function (response) {
         if (response) return response;
-        return isNavigation ? caches.match('./index.html') : Response.error();
+        // Notnagel fuer Seitenaufrufe: die Startseite unter './' - dort
+        // gibt es keine Umleitung.
+        return isNavigation
+          ? caches.match('./').then(function (start) { return start || caches.match('./index.html'); })
+          : Response.error();
       });
     })
   );
