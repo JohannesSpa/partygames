@@ -748,6 +748,58 @@
   box-shadow: var(--shadow-primary);
 }
 
+/* Umbrechende Chip-Reihe (Kader-Auswahl) */
+.chip-row--wrap {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+.chip--player {
+  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.chip--player svg { flex: 0 0 auto; }
+
+/* --- Gruppenzeile ------------------------------------------------------ */
+
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+  cursor: pointer;
+}
+
+.group-row:hover { background: var(--surface); }
+
+.group-row--active {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  background: var(--primary-soft);
+}
+
+.group-row__mark {
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: var(--r-full);
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.group-row--active .group-row__mark {
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--text-on-primary);
+}
+
 /* --- Detailliste im Spielerprofil ------------------------------------- */
 
 .detail-list {

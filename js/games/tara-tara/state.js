@@ -54,6 +54,8 @@ PG.taraTara.state = (function () {
       winnerId: null,
       gameId: null,
       startedAt: null,
+      // Gruppe, fuer die dieses Spiel zaehlt (null = nur lokal)
+      groupCode: null,
       recorded: false,
       updatedAt: Date.now()
     };
@@ -174,7 +176,7 @@ PG.taraTara.state = (function () {
       /* --- Spielerverwaltung --- */
 
       case 'addPlayer': {
-        var player = L.createPlayer(action.name);
+        var player = L.createPlayer(action.name, action.playerId);
         return patch(state, {
           players: state.players.concat([player]),
           order: state.order.concat([player.id])
@@ -216,6 +218,7 @@ PG.taraTara.state = (function () {
           winnerId: null,
           gameId: newGameId(),
           startedAt: Date.now(),
+          groupCode: action.group || null,
           recorded: false,
           // Runde 1: ein zufaelliger Spieler beginnt
           startPlayerId: L.pickRandom(ids)
@@ -397,6 +400,7 @@ PG.taraTara.state = (function () {
           winnerId: null,
           gameId: newGameId(),
           startedAt: Date.now(),
+          groupCode: state.groupCode,
           recorded: false,
           startPlayerId: L.pickRandom(state.order)
         });
@@ -408,7 +412,8 @@ PG.taraTara.state = (function () {
           players: state.players.map(L.resetPlayer),
           order: state.order.slice(),
           min: state.min,
-          max: state.max
+          max: state.max,
+          groupCode: state.groupCode
         });
 
       default:
@@ -444,7 +449,9 @@ PG.taraTara.state = (function () {
       players: stats.map(function (s) {
         return {
           name: s.name,
-          // Vereinheitlichter Schluessel: "Anna" und "anna" sind dieselbe Person
+          // Kader-Kennung: bleibt auch nach einer Umbenennung gleich
+          playerId: s.playerId || null,
+          // Notnagel ohne Kader: vereinheitlichter Name
           nameKey: PG.history.normalizeName(s.name),
           placement: s.placement,
           rounds: s.rounds,

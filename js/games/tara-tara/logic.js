@@ -49,11 +49,17 @@ PG.taraTara.logic = (function () {
 
   var idCounter = 0;
 
-  /** @returns {Player} */
-  function createPlayer(name) {
+  /**
+   * @param {string} name
+   * @param {string} [playerId] Kennung aus dem Gruppenkader, falls vorhanden
+   * @returns {Player}
+   */
+  function createPlayer(name, playerId) {
     idCounter += 1;
     return {
       id: 'p' + Date.now().toString(36) + '-' + idCounter,
+      // Bleibt ueber Spiele hinweg gleich - daran haengt die Statistik.
+      playerId: playerId || null,
       name: String(name).trim(),
       eliminated: false,
       eliminatedRound: null,
@@ -71,6 +77,7 @@ PG.taraTara.logic = (function () {
   function resetPlayer(player) {
     return {
       id: player.id,
+      playerId: player.playerId || null,
       name: player.name,
       eliminated: false,
       eliminatedRound: null,
@@ -260,6 +267,7 @@ PG.taraTara.logic = (function () {
       var tiebreaks = p.history.filter(function (r) { return r.tiebreak; }).length;
       return {
         id: p.id,
+        playerId: p.playerId || null,
         name: p.name,
         rounds: p.history.length,
         average: errors.length ? sum / errors.length : null,

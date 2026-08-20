@@ -44,10 +44,23 @@ def init_db():
 
 
 def is_valid_record(record):
-    return (isinstance(record, dict)
-            and isinstance(record.get('id'), str) and 0 < len(record['id']) <= 64
-            and isinstance(record.get('finishedAt'), (int, float)) and record['finishedAt'] > 0
+    """Spielergebnis oder Kaderaenderung - beide teilen sich die Ablage."""
+    if not isinstance(record, dict):
+        return False
+    if not isinstance(record.get('id'), str) or not 0 < len(record['id']) <= 64:
+        return False
+
+    if record.get('kind') == 'member':
+        return (isinstance(record.get('playerId'), str) and 0 < len(record['playerId']) <= 64
+                and isinstance(record.get('name'), str) and len(record['name']) <= 60
+                and isinstance(record.get('updatedAt'), (int, float)) and record['updatedAt'] > 0)
+
+    return (isinstance(record.get('finishedAt'), (int, float)) and record['finishedAt'] > 0
             and isinstance(record.get('players'), list) and 0 < len(record['players']) <= 50)
+
+
+def timestamp_of(record):
+    return int(record['updatedAt'] if record.get('kind') == 'member' else record['finishedAt'])
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -120,7 +133,7 @@ class Handler(SimpleHTTPRequestHandler):
         for record in valid:
             conn.execute(
                 'INSERT OR IGNORE INTO games (group_code, id, finished_at, payload) VALUES (?, ?, ?, ?)',
-                (group, record['id'], int(record['finishedAt']), json.dumps(record))
+                (group, record['id'], timestamp_of(record), json.dumps(record))
             )
         conn.commit()
 

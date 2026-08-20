@@ -309,6 +309,55 @@ PG.tests = (function () {
     check('Code: erzeugter Code ist gueltig', PG.sync.validateCode(PG.sync.generateCode()).ok);
     check('Code: zwei Codes unterscheiden sich', PG.sync.generateCode() !== PG.sync.generateCode());
 
+    /* --- Kader ---------------------------------------------------------- */
+    var R = PG.roster;
+    var kaderEvents = [
+      { kind: 'member', id: 'e1', playerId: 'p1', name: 'Anna', updatedAt: 1000 },
+      { kind: 'member', id: 'e2', playerId: 'p2', name: 'Tom', updatedAt: 1000 },
+      { kind: 'member', id: 'e3', playerId: 'p1', name: 'Anna B.', updatedAt: 2000 },
+      { kind: 'member', id: 'e4', playerId: 'p2', name: 'Tom', removed: true, updatedAt: 3000 }
+    ];
+    var kader = R.reduceEvents(kaderEvents);
+    eq('Kader: nur aktive Spieler', kader.length, 1);
+    eq('Kader: juengste Umbenennung gewinnt', kader[0].name, 'Anna B.');
+    eq('Kader: Kennung bleibt beim Umbenennen', kader[0].playerId, 'p1');
+    eq('Kader: aeltere Eintraege ueberstimmen nicht',
+      R.reduceEvents(kaderEvents.concat([
+        { kind: 'member', id: 'e5', playerId: 'p1', name: 'Alt', updatedAt: 500 }
+      ]))[0].name, 'Anna B.');
+    eq('Kader: leere Folge', R.reduceEvents([]).length, 0);
+    eq('Kader: Eintragspruefung gueltig', R.isValidEvent(kaderEvents[0]), true);
+    eq('Kader: ohne playerId ungueltig',
+      R.isValidEvent({ kind: 'member', id: 'x', name: 'A', updatedAt: 1 }), false);
+    eq('Kader: Spielergebnis ist kein Kadereintrag', R.isValidEvent(sample[0]), false);
+
+    /* --- Statistik ueber die Spieler-Kennung --------------------------- */
+    var mitId = H.summarize([
+      { id: 'i1', game: 'tara-tara', finishedAt: 1000, winner: 'Anna', players: [
+        { name: 'Anna', playerId: 'p1', placement: 1, rounds: 1, totalError: 2, best: 2, worst: 2,
+          roundWins: 1, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 },
+        { name: 'Tom', playerId: 'p2', placement: 2, rounds: 1, totalError: 9, best: 9, worst: 9,
+          roundWins: 0, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 }
+      ] },
+      { id: 'i2', game: 'tara-tara', finishedAt: 2000, winner: 'Anna B.', players: [
+        { name: 'Anna B.', playerId: 'p1', placement: 1, rounds: 1, totalError: 1, best: 1, worst: 1,
+          roundWins: 1, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 },
+        { name: 'Tom', playerId: 'p2', placement: 2, rounds: 1, totalError: 7, best: 7, worst: 7,
+          roundWins: 0, crownsEarned: 0, crownsUsed: 0, perfectHits: 0, tiebreaks: 0, under: 0 }
+      ] }
+    ]);
+    eq('Statistik: Umbenennung teilt die Person nicht', mitId.players.length, 2);
+    var annaMitId = mitId.players.filter(function (p) { return p.playerId === 'p1'; })[0];
+    eq('Statistik: beide Spiele bei derselben Person', annaMitId.games, 2);
+    eq('Statistik: neuer Name wird angezeigt', annaMitId.name, 'Anna B.');
+
+    /* --- Mehrere Gruppen ------------------------------------------------ */
+    eq('Gruppen: Code wird vereinheitlicht', PG.sync.validateCode(' party-abcd ').code, 'PARTY-ABCD');
+    check('Gruppen: lokale Zusatzfelder werden nicht gesendet',
+      Object.keys(PG.sync.stripLocal({ id: 'x', _group: 'G', name: 'n' })).indexOf('_group') < 0);
+    eq('Gruppen: uebrige Felder bleiben erhalten',
+      Object.keys(PG.sync.stripLocal({ id: 'x', _group: 'G', name: 'n' })).sort(), ['id', 'name']);
+
     /* --- Ergebnis-Datensatz -------------------------------------------- */
     var record = S.buildRecord(st);
     eq('Datensatz: Spieler enthalten', record.players.length, 4);

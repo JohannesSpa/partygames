@@ -37,9 +37,61 @@ PG.taraTara.screens = (function () {
      1. Spieler anlegen
      ================================================================ */
 
+  /** Gruppe, fuer die das naechste Spiel zaehlen soll. */
+  var chosenGroup = null;
+
+  function currentGroup() {
+    var vorhanden = PG.sync.groups().map(function (g) { return g.code; });
+    if (chosenGroup === '') return '';                 // bewusst ohne Gruppe
+    if (chosenGroup && vorhanden.indexOf(chosenGroup) >= 0) return chosenGroup;
+    return PG.sync.activeGroup() || '';
+  }
+
+  /** Auswahl, fuer welche Gruppe das Spiel zaehlt (nur wenn es mehrere gibt). */
+  function groupChooser() {
+    var gruppen = PG.sync.groups();
+    if (!gruppen.length) return null;
+
+    var aktuell = currentGroup();
+
+    if (gruppen.length === 1 && aktuell === gruppen[0].code) {
+      // Nur eine Gruppe: kein Umschalter noetig, nur der Hinweis.
+      return h('div', { class: 'row-between' },
+        h('span', { class: 'eyebrow', text: 'Zählt für' }),
+        ui.badge(PG.sync.groupName(gruppen[0].code), 'primary', 'users')
+      );
+    }
+
+    var optionen = gruppen.map(function (g) {
+      return { value: g.code, label: PG.sync.groupName(g.code) };
+    }).concat([{ value: '', label: 'Ohne Gruppe' }]);
+
+    return h('div', { class: 'stack' },
+      h('div', { class: 'eyebrow', text: 'Zählt für' }),
+      h('div', { class: 'chip-row' }, optionen.map(function (option) {
+        return h('button', {
+          class: 'chip',
+          type: 'button',
+          'aria-pressed': option.value === aktuell ? 'true' : 'false',
+          onClick: function () {
+            chosenGroup = option.value;
+            PG.audio.click();
+            // Spielerliste leeren: der Kader der neuen Gruppe ist ein anderer.
+            commit({ type: 'reset' });
+          }
+        }, h('span', { text: option.label }));
+      }))
+    );
+  }
+
   function playersScreen(st) {
+    var gruppe = currentGroup();
+    var kader = gruppe ? PG.roster.members(gruppe) : [];
+    var imSpiel = {};
+    st.players.forEach(function (p) { if (p.playerId) imSpiel[p.playerId] = p; });
+
     var nameField = ui.field({
-      placeholder: 'Name eingeben',
+      placeholder: kader.length ? 'Neuen Spieler aufnehmen' : 'Name eingeben',
       maxlength: 20,
       autocapitalize: 'words',
       enterkeyhint: 'done'
@@ -47,7 +99,40 @@ PG.taraTara.screens = (function () {
     nameField.el.style.flex = '1';
 
     function addPlayer() {
-      var check = L.validatePlayerName(nameField.value(), st.players);
+      var roh = nameField.value();
+
+      // Mit Gruppe: der Name wandert zusaetzlich dauerhaft in den Kader.
+      if (gruppe) {
+        var vorhanden = PG.roster.findByName(gruppe, roh);
+        if (vorhanden) {
+          if (imSpiel[vorhanden.playerId]) {
+            nameField.setError('Spielt bereits mit.');
+            PG.audio.error();
+            return;
+          }
+          focusNameInput = true;
+          PG.audio.confirm();
+          commit({ type: 'addPlayer', name: vorhanden.name, playerId: vorhanden.playerId });
+          return;
+        }
+
+        var neu = PG.roster.add(gruppe, roh);
+        if (!neu.ok) {
+          nameField.setError(neu.error);
+          PG.audio.error();
+          PG.haptics.warning();
+          return;
+        }
+        focusNameInput = true;
+        PG.audio.confirm();
+        PG.haptics.light();
+        PG.sync.autoSync();
+        commit({ type: 'addPlayer', name: neu.member.name, playerId: neu.member.playerId });
+        return;
+      }
+
+      // Ohne Gruppe: wie bisher, nur fuer dieses eine Spiel.
+      var check = L.validatePlayerName(roh, st.players);
       if (!check.ok) {
         nameField.setError(check.error);
         PG.audio.error();
@@ -64,19 +149,39 @@ PG.taraTara.screens = (function () {
       if (ev.key === 'Enter') { ev.preventDefault(); addPlayer(); }
     });
 
-    var addRow = h('div', { class: 'row', style: { 'align-items': 'flex-start' } },
-      nameField.el,
-      ui.button({
-        icon: 'plus',
-        variant: 'primary',
-        block: false,
-        silent: true,
-        class: 'btn--add',
-        onClick: addPlayer
-      })
-    );
+    /** Kader-Chips: antippen nimmt jemanden ins Spiel oder wieder heraus. */
+    function kaderAuswahl() {
+      if (!kader.length) return null;
+      return h('div', { class: 'stack' },
+        h('div', { class: 'row-between' },
+          h('span', { class: 'eyebrow', text: 'Wer ist dabei?' }),
+          h('span', { class: 'text-subtle',
+            text: st.players.length + ' von ' + kader.length + ' ausgewählt' })
+        ),
+        h('div', { class: 'chip-row chip-row--wrap' }, kader.map(function (m) {
+          var dabei = !!imSpiel[m.playerId];
+          return h('button', {
+            class: 'chip chip--player',
+            type: 'button',
+            'aria-pressed': dabei ? 'true' : 'false',
+            onClick: function () {
+              PG.haptics.light();
+              if (dabei) {
+                commit({ type: 'removePlayer', id: imSpiel[m.playerId].id });
+              } else {
+                PG.audio.click();
+                commit({ type: 'addPlayer', name: m.name, playerId: m.playerId });
+              }
+            }
+          },
+            PG.icons.el(dabei ? 'check' : 'plus', 15),
+            h('span', { text: m.name })
+          );
+        }))
+      );
+    }
 
-    var list = st.players.length
+    var liste = st.players.length
       ? h('ul', { class: 'stack' }, st.players.map(function (player, index) {
           return h('li', { class: 'player-row fade-in d-' + Math.min(index, 7) },
             ui.avatar(player.name),
@@ -95,7 +200,9 @@ PG.taraTara.screens = (function () {
       : ui.empty({
           icon: 'users',
           title: 'Noch keine Spieler',
-          text: 'Mindestens zwei Spieler werden benötigt.'
+          text: kader.length
+            ? 'Tippe oben auf die Namen, die heute mitspielen.'
+            : 'Mindestens zwei Spieler werden benötigt.'
         });
 
     var node = h('div', { class: 'screen' },
@@ -104,10 +211,26 @@ PG.taraTara.screens = (function () {
         h('p', { class: 'text-muted', style: { 'margin-top': '4px' },
           text: 'Die Reihenfolge der Liste ist die Sitzordnung im Uhrzeigersinn.' })
       ),
-      addRow,
-      list,
+
+      groupChooser(),
+      kaderAuswahl(),
+
+      h('div', { class: 'row', style: { 'align-items': 'flex-start' } },
+        nameField.el,
+        ui.button({
+          icon: 'plus',
+          variant: 'primary',
+          block: false,
+          silent: true,
+          class: 'btn--add',
+          onClick: addPlayer
+        })
+      ),
+
+      liste,
+
       h('div', { class: 'actions' },
-        h('div', { class: 'text-subtle text-center' , text:
+        h('div', { class: 'text-subtle text-center', text:
           st.players.length < 2
             ? 'Noch ' + (2 - st.players.length) + ' Spieler bis zum Start'
             : st.players.length + ' Spieler bereit' }),
@@ -184,7 +307,7 @@ PG.taraTara.screens = (function () {
         return;
       }
       PG.haptics.medium();
-      commit({ type: 'startGame', min: check.min, max: check.max });
+      commit({ type: 'startGame', min: check.min, max: check.max, group: currentGroup() });
     }
 
     var node = h('div', { class: 'screen' },
@@ -743,7 +866,7 @@ PG.taraTara.screens = (function () {
         // Ergebnis genau einmal in die Gesamtstatistik uebernehmen.
         // Ohne router.refresh, damit die Siegerehrung nicht neu startet.
         if (!st.recorded) {
-          PG.history.add(S.buildRecord(st));
+          PG.history.add(S.buildRecord(st), st.groupCode || null);
           S.store.dispatch({ type: 'markRecorded' });
           // Frisches Ergebnis gleich in die gemeinsame Bestenliste schieben.
           PG.sync.autoSync();

@@ -42,13 +42,44 @@ PG.history = (function () {
     return trimmed;
   }
 
-  /** @param {GameRecord} record */
-  function add(record) {
+  /**
+   * @param {GameRecord} record
+   * @param {string} [groupCode] Gruppe, zu der das Ergebnis zaehlt
+   */
+  function add(record, groupCode) {
     var games = all();
     if (games.some(function (g) { return g.id === record.id; })) return false;
+    // _group ist lokale Zusatzinformation und wird beim Senden entfernt.
+    if (groupCode) record._group = groupCode;
     games.push(record);
     save(games);
     return true;
+  }
+
+  /** Alle Ergebnisse einer Gruppe. */
+  function recordsOfGroup(groupCode) {
+    return all().filter(function (g) { return g._group === groupCode; });
+  }
+
+  /** Entfernt die Ergebnisse einer Gruppe (beim Verlassen). */
+  function removeGroup(groupCode) {
+    var rest = all().filter(function (g) { return g._group !== groupCode; });
+    save(rest);
+    return rest.length;
+  }
+
+  /**
+   * Ordnet noch unzugeordnete Ergebnisse einer Gruppe zu.
+   * Wird einmalig beim Umstieg auf mehrere Gruppen gebraucht.
+   */
+  function adoptUntagged(groupCode) {
+    var games = all();
+    var count = 0;
+    games.forEach(function (g) {
+      if (!g._group) { g._group = groupCode; count += 1; }
+    });
+    if (count) save(games);
+    return count;
   }
 
   function clear() {
@@ -102,12 +133,19 @@ PG.history = (function () {
     return found ? found.label : 'Gesamt';
   }
 
-  /** Spiele innerhalb eines Zeitraums. */
-  function gamesIn(period, gameId) {
+  /**
+   * Spiele innerhalb eines Zeitraums.
+   * @param {string} period
+   * @param {string} [gameId]  auf ein Spiel einschraenken
+   * @param {string} [groupCode] auf eine Gruppe einschraenken ('' = alle)
+   */
+  function gamesIn(period, gameId, groupCode) {
     var from = periodStart(period);
     return all().filter(function (g) {
       if (g.finishedAt < from) return false;
-      return gameId ? g.game === gameId : true;
+      if (gameId && g.game !== gameId) return false;
+      if (groupCode && g._group !== groupCode) return false;
+      return true;
     });
   }
 
@@ -131,6 +169,7 @@ PG.history = (function () {
   function emptyRow(name) {
     return {
       name: name,
+      playerId: null,
       games: 0,
       wins: 0,
       podiums: 0,
@@ -168,8 +207,11 @@ PG.history = (function () {
       var fieldSize = game.players.length;
 
       game.players.forEach(function (p) {
-        var key = normalizeName(p.name);
+        // Wenn eine Spieler-ID vorliegt, zaehlt sie - dann bleibt die
+        // Statistik auch nach einer Umbenennung an derselben Person.
+        var key = p.playerId || normalizeName(p.name);
         var row = byName[key] || (byName[key] = emptyRow(p.name));
+        if (p.playerId) row.playerId = p.playerId;
 
         // Anzeigename: die Schreibweise aus dem juengsten Spiel gewinnt.
         if (game.finishedAt >= row.lastPlayed) row.name = p.name;
@@ -229,10 +271,11 @@ PG.history = (function () {
    * @param {string} period 'day' | 'month' | 'year' | 'all'
    * @param {string} [gameId] optional auf ein Spiel einschraenken
    */
-  function aggregate(period, gameId) {
-    var result = summarize(gamesIn(period, gameId));
+  function aggregate(period, gameId, groupCode) {
+    var result = summarize(gamesIn(period, gameId, groupCode));
     result.from = periodStart(period);
     result.period = period;
+    result.group = groupCode || null;
     return result;
   }
 
@@ -314,7 +357,7 @@ PG.history = (function () {
    * @param {Array} incoming
    * @returns {{added: number, skipped: number}}
    */
-  function mergeRecords(incoming) {
+  function mergeRecords(incoming, groupCode) {
     if (!Array.isArray(incoming) || !incoming.length) return { added: 0, skipped: 0 };
 
     var games = all();
@@ -325,6 +368,7 @@ PG.history = (function () {
     incoming.forEach(function (record) {
       if (!isValidRecord(record) || known[record.id]) { skipped += 1; return; }
       known[record.id] = true;
+      if (groupCode) record._group = groupCode;
       games.push(record);
       added += 1;
     });
@@ -359,6 +403,9 @@ PG.history = (function () {
     normalizeName: normalizeName,
     isValidRecord: isValidRecord,
     mergeRecords: mergeRecords,
+    recordsOfGroup: recordsOfGroup,
+    removeGroup: removeGroup,
+    adoptUntagged: adoptUntagged,
     subscribe: subscribe,
     periodStart: periodStart,
     periodLabel: periodLabel,

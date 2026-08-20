@@ -50,13 +50,36 @@ function fail(message, status = 400) {
   return json({ error: message }, status);
 }
 
-/** Sieht der Datensatz brauchbar aus? Bewusst genuegsam geprueft. */
+/**
+ * Sieht der Eintrag brauchbar aus? Bewusst genuegsam geprueft.
+ *
+ * Es gibt zwei Sorten, die sich dieselbe Ablage teilen:
+ *   - Spielergebnisse (Standard, ohne kind)
+ *   - Kaderaenderungen (kind: 'member') - Aufnehmen, Umbenennen, Entfernen
+ * Beide sind unveraenderlich; eine Aenderung ist ein neuer Eintrag mit
+ * neuerem Zeitstempel. Der Server muss davon nichts verstehen, er haengt
+ * nur an - die Auswertung passiert auf den Geraeten.
+ */
 function isValidRecord(record) {
-  return record &&
-    typeof record.id === 'string' && record.id.length > 0 && record.id.length <= 64 &&
-    typeof record.finishedAt === 'number' && record.finishedAt > 0 &&
+  if (!record || typeof record.id !== 'string' || !record.id.length || record.id.length > 64) {
+    return false;
+  }
+
+  if (record.kind === 'member') {
+    return typeof record.playerId === 'string' && record.playerId.length > 0 &&
+      record.playerId.length <= 64 &&
+      typeof record.name === 'string' && record.name.length <= 60 &&
+      typeof record.updatedAt === 'number' && record.updatedAt > 0;
+  }
+
+  return typeof record.finishedAt === 'number' && record.finishedAt > 0 &&
     Array.isArray(record.players) && record.players.length > 0 &&
     record.players.length <= 50;
+}
+
+/** Zeitstempel fuer die Sortierung - je nach Sorte ein anderes Feld. */
+function timestampOf(record) {
+  return Math.floor(record.kind === 'member' ? record.updatedAt : record.finishedAt);
 }
 
 export async function onRequestPost({ request, env }) {
@@ -89,7 +112,7 @@ export async function onRequestPost({ request, env }) {
     await env.DB.batch(valid.map((record) => insert.bind(
       group,
       record.id,
-      Math.floor(record.finishedAt),
+      timestampOf(record),
       JSON.stringify(record)
     )));
   }

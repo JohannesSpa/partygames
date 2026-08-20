@@ -1,30 +1,30 @@
 /**
- * sync.js - Abgleich der Ergebnis-Historie ueber mehrere Geraete.
+ * sync.js - Abgleich ueber mehrere Geraete, fuer beliebig viele Gruppen.
  *
- * Grundgedanke: Spielergebnisse sind unveraenderlich und tragen eine
- * eindeutige id. Dadurch kann es keine Konflikte geben - Abgleich heisst
- * schlicht "neue Datensaetze hinschicken, neue Datensaetze abholen".
- * Ein abgebrochener Abgleich darf beliebig oft wiederholt werden.
+ * Grundgedanke: Alles, was abgeglichen wird, ist ein unveraenderlicher
+ * Eintrag mit eindeutiger id - Spielergebnisse ebenso wie Kader-Aenderungen.
+ * Dadurch kann es keine Konflikte geben: Abgleich heisst "neue Eintraege
+ * hinschicken, neue Eintraege abholen", und ein Abbruch darf beliebig oft
+ * wiederholt werden.
  *
  * Die App bleibt offline-first: der LocalStorage ist die Wahrheit, der
- * Server nur ein Briefkasten zwischen den Geraeten. Ohne Netz aendert sich
- * nichts, der Rueckstand wird beim naechsten Mal nachgeholt.
+ * Server nur ein Briefkasten zwischen den Geraeten.
  *
- * Zugang ueber einen gemeinsamen Gruppencode statt Benutzerkonten - wer den
- * Code hat, sieht die Bestenliste der Gruppe und kann Ergebnisse beisteuern.
+ * Man kann in mehreren Gruppen gleichzeitig sein (Freunde, Kollegen …).
+ * Jede Gruppe hat ihren eigenen Zaehlerstand; eine davon ist die aktive.
  */
 window.PG = window.PG || {};
 
 PG.sync = (function () {
   'use strict';
 
-  var KEY = 'pg.sync.v1';
+  var KEY = 'pg.sync.v2';
+  var LEGACY_KEY = 'pg.sync.v1';
   var SAME_ORIGIN_ENDPOINT = 'api/sync';
-  var PUSH_LIMIT = 200;          // Datensaetze je Anfrage
-  var AUTO_INTERVAL = 20000;     // fruehestens alle 20 s automatisch
+  var PUSH_LIMIT = 200;
+  var AUTO_INTERVAL = 20000;
   var TIMEOUT = 12000;
 
-  // Verwechslungssichere Zeichen (kein 0/O, kein 1/I)
   var CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   var CODE_PATTERN = /^[A-Z0-9-]{6,32}$/;
 
@@ -35,39 +35,85 @@ PG.sync = (function () {
 
   /* ------------------------------------------------------------ Einstellung */
 
-  /**
-   * Standardadresse aus js/config.js - dadurch muss sie nur einmal zentral
-   * gepflegt werden und gilt nach dem Veroeffentlichen fuer alle Geraete.
-   */
   function defaultEndpoint() {
     var configured = PG.config && PG.config.syncEndpoint;
     return (configured && String(configured).trim()) || SAME_ORIGIN_ENDPOINT;
   }
 
+  function emptyGroup(code) {
+    return { code: code, label: '', lastSeq: 0, syncedIds: [], lastSyncAt: 0, lastError: null };
+  }
+
+  /**
+   * Liest die Einstellung. Uebernimmt dabei einmalig eine alte
+   * Einzelgruppen-Konfiguration.
+   */
   function config() {
-    var stored = PG.storage.get(KEY, null) || {};
+    var stored = PG.storage.get(KEY, null);
+
+    if (!stored) {
+      var legacy = PG.storage.get(LEGACY_KEY, null);
+      if (legacy && legacy.group) {
+        stored = {
+          version: 2,
+          groups: [{
+            code: legacy.group,
+            label: '',
+            lastSeq: legacy.lastSeq || 0,
+            syncedIds: Array.isArray(legacy.syncedIds) ? legacy.syncedIds : [],
+            lastSyncAt: legacy.lastSyncAt || 0,
+            lastError: legacy.lastError || null
+          }],
+          activeGroup: legacy.group,
+          endpointOverride: legacy.endpointOverride || null
+        };
+        PG.storage.set(KEY, stored);
+        PG.storage.remove(LEGACY_KEY);
+      }
+    }
+
+    stored = stored || {};
+    var groups = Array.isArray(stored.groups) ? stored.groups : [];
+    var active = stored.activeGroup || (groups[0] ? groups[0].code : null);
+
     return {
-      group: stored.group || null,
-      // Eine geraetespezifische Eingabe hat Vorrang, sonst gilt die
-      // zentrale Einstellung.
+      version: 2,
+      groups: groups,
+      activeGroup: groups.some(function (g) { return g.code === active; }) ? active : (groups[0] ? groups[0].code : null),
       endpoint: stored.endpointOverride || defaultEndpoint(),
-      endpointOverride: stored.endpointOverride || null,
-      lastSeq: stored.lastSeq || 0,
-      syncedIds: Array.isArray(stored.syncedIds) ? stored.syncedIds : [],
-      lastSyncAt: stored.lastSyncAt || 0,
-      lastError: stored.lastError || null
+      endpointOverride: stored.endpointOverride || null
     };
   }
 
   function saveConfig(changes) {
     var next = Object.assign(config(), changes);
-    PG.storage.set(KEY, next);
+    PG.storage.set(KEY, {
+      version: 2,
+      groups: next.groups,
+      activeGroup: next.activeGroup,
+      endpointOverride: next.endpointOverride
+    });
     return next;
   }
 
-  function isEnabled() {
-    return !!config().group;
+  /** Aendert die Daten EINER Gruppe. */
+  function updateGroup(code, changes) {
+    var cfg = config();
+    var groups = cfg.groups.map(function (g) {
+      return g.code === code ? Object.assign({}, g, changes) : g;
+    });
+    return saveConfig({ groups: groups });
   }
+
+  function groups() { return config().groups; }
+
+  function group(code) {
+    return config().groups.filter(function (g) { return g.code === code; })[0] || null;
+  }
+
+  function activeGroup() { return config().activeGroup; }
+
+  function isEnabled() { return config().groups.length > 0; }
 
   function status() {
     if (!isEnabled()) return 'off';
@@ -88,26 +134,18 @@ PG.sync = (function () {
 
   /* ------------------------------------------------------------ Gruppencode */
 
-  /** Erzeugt einen neuen Gruppencode, z. B. PARTY-K7M2-QX94. */
   function generateCode() {
     function block(length) {
       var out = '';
       var random = new Uint8Array(length);
-      if (window.crypto && window.crypto.getRandomValues) {
-        window.crypto.getRandomValues(random);
-      } else {
-        for (var r = 0; r < length; r++) random[r] = Math.floor(Math.random() * 256);
-      }
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(random);
+      else for (var r = 0; r < length; r++) random[r] = Math.floor(Math.random() * 256);
       for (var i = 0; i < length; i++) out += CODE_ALPHABET[random[i] % CODE_ALPHABET.length];
       return out;
     }
     return 'PARTY-' + block(4) + '-' + block(4);
   }
 
-  /**
-   * Prueft und vereinheitlicht einen eingegebenen Code.
-   * @returns {{ok: boolean, code?: string, error?: string}}
-   */
   function validateCode(raw) {
     var code = String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
     if (!code) return { ok: false, error: 'Bitte einen Gruppencode eingeben.' };
@@ -117,40 +155,73 @@ PG.sync = (function () {
     return { ok: true, code: code };
   }
 
-  /** Tritt einer Gruppe bei bzw. legt sie an. Danach wird alles abgeholt. */
-  function join(rawCode) {
+  /**
+   * Gruppe beitreten bzw. anlegen. Bestehende Gruppen bleiben erhalten.
+   * @param {string} rawCode
+   * @param {string} [label] frei waehlbarer Anzeigename
+   */
+  function join(rawCode, label) {
     var check = validateCode(rawCode);
     if (!check.ok) return check;
-    saveConfig({ group: check.code, lastSeq: 0, syncedIds: [], lastError: null });
+
+    var cfg = config();
+    if (cfg.groups.some(function (g) { return g.code === check.code; })) {
+      saveConfig({ activeGroup: check.code });
+      notify();
+      return { ok: true, code: check.code, alreadyMember: true };
+    }
+
+    var neu = emptyGroup(check.code);
+    neu.label = String(label || '').trim().slice(0, 30);
+    saveConfig({ groups: cfg.groups.concat([neu]), activeGroup: check.code });
     state = 'idle';
     notify();
     return { ok: true, code: check.code };
   }
 
-  /** Verlaesst die Gruppe. Die lokalen Ergebnisse bleiben erhalten. */
-  function leave() {
-    PG.storage.remove(KEY);
+  /** Gruppe verlassen. Die Ergebnisse dieser Gruppe werden lokal entfernt. */
+  function leave(code) {
+    var cfg = config();
+    var rest = cfg.groups.filter(function (g) { return g.code !== code; });
+    saveConfig({
+      groups: rest,
+      activeGroup: cfg.activeGroup === code ? (rest[0] ? rest[0].code : null) : cfg.activeGroup
+    });
+    PG.roster.clearGroup(code);
+    PG.history.removeGroup(code);
     state = 'idle';
     notify();
   }
 
-  /** Einladungslink, den man Freunden schicken kann. */
-  function inviteLink() {
-    var cfg = config();
-    if (!cfg.group) return null;
-    var base = window.location.href.split('#')[0];
-    return base + '#join=' + encodeURIComponent(cfg.group);
+  function setActive(code) {
+    saveConfig({ activeGroup: code });
+    notify();
+  }
+
+  function setLabel(code, label) {
+    updateGroup(code, { label: String(label || '').trim().slice(0, 30) });
+    notify();
+  }
+
+  /** Anzeigename einer Gruppe (frei vergeben oder der Code). */
+  function groupName(code) {
+    var g = group(code);
+    return (g && g.label) || code || '';
+  }
+
+  function inviteLink(code) {
+    var ziel = code || activeGroup();
+    if (!ziel) return null;
+    return window.location.href.split('#')[0] + '#join=' + encodeURIComponent(ziel);
   }
 
   /* --------------------------------------------------------------- Auswahl */
 
   /**
-   * Welche Datensaetze muessen noch hochgeladen werden?
-   * Rein und dadurch einzeln testbar.
-   * @param {Array} records lokale Historie
-   * @param {string[]} syncedIds bereits bestaetigte ids
+   * Welche Eintraege muessen noch hochgeladen werden?
+   * @param {Array} records
+   * @param {string[]} syncedIds
    * @param {number} [limit]
-   * @returns {Array}
    */
   function selectUnsynced(records, syncedIds, limit) {
     var known = {};
@@ -162,20 +233,27 @@ PG.sync = (function () {
     return out;
   }
 
-  /** Haelt die Liste bestaetigter ids in Grenzen. */
   function mergeSyncedIds(existing, added) {
     var seen = {};
     var out = [];
     (existing || []).concat(added || []).forEach(function (id) {
       if (!seen[id]) { seen[id] = true; out.push(id); }
     });
-    return out.slice(-1000);
+    return out.slice(-2000);
+  }
+
+  /** Entfernt lokale Zusatzfelder (mit _ am Anfang) vor dem Senden. */
+  function stripLocal(record) {
+    var copy = {};
+    Object.keys(record).forEach(function (k) {
+      if (k.charAt(0) !== '_') copy[k] = record[k];
+    });
+    return copy;
   }
 
   /* ----------------------------------------------------------- Uebertragung */
 
   function request(url, payload) {
-    // Eigener Zeitrahmen: ein haengender Aufruf soll die App nicht blockieren.
     var controller = window.AbortController ? new AbortController() : null;
     var timer = setTimeout(function () { if (controller) controller.abort(); }, TIMEOUT);
 
@@ -208,15 +286,67 @@ PG.sync = (function () {
   }
 
   /**
-   * Fuehrt einen Abgleich durch: senden und holen in einem Aufruf.
-   * @param {{silent?: boolean}} [opts]
-   * @returns {Promise<{ok: boolean, pushed?: number, pulled?: number, error?: string}>}
+   * Gleicht EINE Gruppe ab: Spielergebnisse und Kader in einem Aufruf.
+   * @param {string} code
+   * @returns {Promise<{ok, pushed?, pulled?, error?}>}
+   */
+  function syncGroup(code) {
+    var cfg = config();
+    var g = group(code);
+    if (!g) return Promise.resolve({ ok: false, error: 'Unbekannte Gruppe.' });
+
+    // Zu sendende Eintraege: Spiele dieser Gruppe + Kaderaenderungen
+    var spiele = PG.history.recordsOfGroup(code).map(stripLocal);
+    var kader = PG.roster.events(code);
+    var offen = selectUnsynced(spiele.concat(kader), g.syncedIds, PUSH_LIMIT);
+
+    return request(cfg.endpoint, {
+      group: code,
+      since: g.lastSeq,
+      games: offen
+    }).then(function (data) {
+      var eingehendeSpiele = [];
+      var eingehenderKader = [];
+
+      data.games.forEach(function (eintrag) {
+        if (eintrag && eintrag.kind === 'member') eingehenderKader.push(eintrag);
+        else eingehendeSpiele.push(eintrag);
+      });
+
+      var spieleErgebnis = PG.history.mergeRecords(eingehendeSpiele, code);
+      var kaderErgebnis = PG.roster.mergeEvents(code, eingehenderKader);
+
+      updateGroup(code, {
+        lastSeq: typeof data.seq === 'number' ? data.seq : g.lastSeq,
+        syncedIds: mergeSyncedIds(g.syncedIds,
+          offen.map(function (e) { return e.id; })
+            .concat(data.games.map(function (e) { return e.id; }))),
+        lastSyncAt: Date.now(),
+        lastError: null
+      });
+
+      return {
+        ok: true,
+        pushed: offen.length,
+        pulled: spieleErgebnis.added,
+        members: kaderErgebnis.added
+      };
+    }, function (err) {
+      updateGroup(code, { lastError: err.message });
+      return { ok: false, error: err.message };
+    });
+  }
+
+  /**
+   * Gleicht alle Gruppen ab (nacheinander).
+   * @param {{only?: string}} [opts] nur eine bestimmte Gruppe
    */
   function syncNow(opts) {
     opts = opts || {};
     var cfg = config();
+    var ziele = opts.only ? cfg.groups.filter(function (g) { return g.code === opts.only; }) : cfg.groups;
 
-    if (!cfg.group) return Promise.resolve({ ok: false, error: 'Keine Gruppe eingerichtet.' });
+    if (!ziele.length) return Promise.resolve({ ok: false, error: 'Keine Gruppe eingerichtet.' });
     if (running) return running;
     if (navigator.onLine === false) {
       return Promise.resolve({ ok: false, error: 'Offline – wird später nachgeholt.', offline: true });
@@ -225,55 +355,47 @@ PG.sync = (function () {
     state = 'syncing';
     notify();
 
-    var outgoing = selectUnsynced(PG.history.all(), cfg.syncedIds, PUSH_LIMIT);
+    var gesamt = { ok: true, pushed: 0, pulled: 0, members: 0, fehler: [] };
 
-    running = request(cfg.endpoint, {
-      group: cfg.group,
-      since: cfg.lastSeq,
-      games: outgoing
-    }).then(function (data) {
-      var merged = PG.history.mergeRecords(data.games);
-
-      saveConfig({
-        lastSeq: typeof data.seq === 'number' ? data.seq : cfg.lastSeq,
-        syncedIds: mergeSyncedIds(cfg.syncedIds,
-          outgoing.map(function (g) { return g.id; })
-            .concat(data.games.map(function (g) { return g.id; }))),
-        lastSyncAt: Date.now(),
-        lastError: null
+    running = ziele.reduce(function (kette, g) {
+      return kette.then(function () {
+        return syncGroup(g.code).then(function (res) {
+          if (res.ok) {
+            gesamt.pushed += res.pushed || 0;
+            gesamt.pulled += res.pulled || 0;
+            gesamt.members += res.members || 0;
+          } else {
+            gesamt.ok = false;
+            gesamt.fehler.push(groupName(g.code) + ': ' + res.error);
+          }
+        });
       });
-
-      state = 'idle';
+    }, Promise.resolve()).then(function () {
+      state = gesamt.ok ? 'idle' : 'error';
       running = null;
       notify();
-      return { ok: true, pushed: outgoing.length, pulled: merged.added };
-    }, function (err) {
-      saveConfig({ lastError: err.message });
-      state = 'error';
-      running = null;
-      notify();
-      return { ok: false, error: err.message };
+      if (!gesamt.ok) gesamt.error = gesamt.fehler.join(' · ');
+      return gesamt;
     });
 
     return running;
   }
 
-  /** Abgleich im Hintergrund - gedrosselt, ohne Rueckmeldung an den Nutzer. */
   function autoSync() {
     if (!isEnabled()) return;
     var now = Date.now();
     if (now - lastAutoAt < AUTO_INTERVAL) return;
     lastAutoAt = now;
-    syncNow({ silent: true });
+    syncNow();
   }
 
   /* ---------------------------------------------------------- Einladungen */
 
-  /** Fragt nach, bevor ein Einladungslink die Gruppe wechselt. */
   function handleInvite(code) {
     var check = validateCode(code);
     if (!check.ok) return;
-    if (config().group === check.code) return;
+    var cfg = config();
+    var schonDabei = cfg.groups.some(function (g) { return g.code === check.code; });
 
     var h = PG.dom.h;
     var dlg = PG.ui.dialog({
@@ -281,8 +403,8 @@ PG.sync = (function () {
       content: h('div', { class: 'stack' },
         PG.ui.notice({
           icon: 'users',
-          text: config().group
-            ? 'Du bist bereits in einer Gruppe. Möchtest du zu dieser wechseln?'
+          text: schonDabei
+            ? 'Du bist in dieser Gruppe bereits dabei. Soll sie die aktive werden?'
             : 'Du wurdest zu einer gemeinsamen Bestenliste eingeladen.'
         }),
         h('div', { class: 'text-center' },
@@ -292,15 +414,14 @@ PG.sync = (function () {
       ),
       actions: [
         PG.ui.button({
-          label: 'Beitreten', variant: 'primary', icon: 'check',
+          label: schonDabei ? 'Aktiv setzen' : 'Beitreten', variant: 'primary', icon: 'check',
           onClick: function () {
             dlg.close();
             join(check.code);
-            syncNow().then(function (result) {
+            syncNow({ only: check.code }).then(function (result) {
               PG.ui.toast(
                 result.ok ? 'Verbunden – ' + result.pulled + ' Spiele geladen' : result.error,
-                result.ok ? { icon: 'check', variant: 'success' }
-                          : { icon: 'alert', variant: 'danger' }
+                result.ok ? { icon: 'check', variant: 'success' } : { icon: 'alert', variant: 'danger' }
               );
               PG.router.refresh({ skipAnimation: true });
             });
@@ -314,11 +435,9 @@ PG.sync = (function () {
   /* ------------------------------------------------------------------ Start */
 
   function init() {
-    // Einladungslink: #join=CODE
     var match = /[#&]join=([^&]+)/.exec(window.location.hash || '');
     if (match) {
       var invited = decodeURIComponent(match[1]);
-      // Hash entfernen, damit ein Neuladen nicht erneut fragt
       try {
         window.history.replaceState(null, '', window.location.href.split('#')[0]);
       } catch (err) {
@@ -334,6 +453,12 @@ PG.sync = (function () {
   return {
     init: init,
     config: config,
+    groups: groups,
+    group: group,
+    groupName: groupName,
+    activeGroup: activeGroup,
+    setActive: setActive,
+    setLabel: setLabel,
     isEnabled: isEnabled,
     status: status,
     onChange: onChange,
@@ -344,10 +469,11 @@ PG.sync = (function () {
     inviteLink: inviteLink,
     selectUnsynced: selectUnsynced,
     mergeSyncedIds: mergeSyncedIds,
+    stripLocal: stripLocal,
+    syncGroup: syncGroup,
     syncNow: syncNow,
     autoSync: autoSync,
     defaultEndpoint: defaultEndpoint,
-    /** Leerer Wert = zentrale Einstellung verwenden. */
     setEndpoint: function (url) {
       var trimmed = String(url || '').trim();
       saveConfig({ endpointOverride: trimmed || null });

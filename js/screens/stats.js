@@ -21,6 +21,7 @@ PG.statsScreen = (function () {
   // Ansichtszustand bleibt zwischen Aufrufen erhalten
   var period = 'all';
   var metric = 'points';
+  var groupFilter = '';        // '' = alle Gruppen zusammen
 
   /* --------------------------------------------------------- Hilfsmittel */
 
@@ -244,10 +245,36 @@ PG.statsScreen = (function () {
     });
   }
 
+  /** Umschalter zwischen den Gruppen - nur wenn es mehrere gibt. */
+  function groupFilterRow() {
+    var gruppen = PG.sync.groups();
+    if (gruppen.length < 2) {
+      groupFilter = '';
+      return null;
+    }
+
+    var optionen = [{ value: '', label: 'Alle' }].concat(gruppen.map(function (g) {
+      return { value: g.code, label: PG.sync.groupName(g.code) };
+    }));
+
+    return h('div', { class: 'chip-row' }, optionen.map(function (option) {
+      return h('button', {
+        class: 'chip',
+        type: 'button',
+        'aria-pressed': option.value === groupFilter ? 'true' : 'false',
+        onClick: function () {
+          groupFilter = option.value;
+          PG.audio.click();
+          PG.router.refresh({ skipAnimation: true });
+        }
+      }, h('span', { text: option.label }));
+    }));
+  }
+
   /* -------------------------------------------------------------- View */
 
   function view() {
-    var data = H.aggregate(period);
+    var data = H.aggregate(period, null, groupFilter || null);
     var ranked = H.sortPlayers(data.players, metric);
 
     var body;
@@ -344,6 +371,8 @@ PG.statsScreen = (function () {
           PG.router.refresh({ skipAnimation: true });
         }
       }),
+
+      groupFilterRow(),
 
       body,
 
