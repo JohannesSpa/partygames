@@ -66,13 +66,26 @@ PG.storage = (function () {
    */
   function debouncedSetter(key, wait) {
     var timer = null;
-    return function (value) {
+
+    function schreiben(value) {
       if (timer) clearTimeout(timer);
       timer = setTimeout(function () {
         timer = null;
         set(key, value);
       }, wait || 180);
+    }
+
+    /**
+     * Verwirft einen noch ausstehenden Schreibvorgang.
+     * Noetig beim Loeschen: sonst legt ein bereits eingeplanter Schreiber
+     * den gerade entfernten Eintrag wieder an.
+     */
+    schreiben.cancel = function () {
+      if (timer) clearTimeout(timer);
+      timer = null;
     };
+
+    return schreiben;
   }
 
   return {

@@ -484,6 +484,28 @@ PG.taraTara.state = (function () {
     persist(state);
   });
 
+  /*
+   * Ergebnis genau einmal in die Gesamtstatistik uebernehmen.
+   *
+   * Bewusst am Zustand aufgehaengt und nicht an der Siegerehrung: Sobald
+   * das Spiel entschieden ist, steht das Ergebnis fest. Haenge man es an
+   * das Zeichnen des Bildschirms, ginge es verloren, wenn der Browser
+   * gerade nicht zeichnet - etwa weil das Handy gesperrt oder die App im
+   * Hintergrund ist.
+   */
+  var recording = false;
+  store.subscribe(function (state) {
+    if (recording || !state.gameOver || state.recorded || !state.winnerId) return;
+    recording = true;
+    try {
+      PG.history.add(buildRecord(state), state.groupCode || null);
+      store.dispatch({ type: 'markRecorded' });
+      if (PG.sync && PG.sync.autoSync) PG.sync.autoSync();
+    } finally {
+      recording = false;
+    }
+  });
+
   /** Gibt es einen fortsetzbaren Spielstand (Spiel laeuft bereits)? */
   function hasSaved() {
     var saved = PG.storage.get(STORAGE_KEY, null);
@@ -507,6 +529,9 @@ PG.taraTara.state = (function () {
   }
 
   function discard() {
+    // Erst den eingeplanten Schreibvorgang verwerfen, sonst taucht der
+    // Spielstand gleich darauf wieder auf.
+    if (persist.cancel) persist.cancel();
     PG.storage.remove(STORAGE_KEY);
     store.replace(initialState());
   }

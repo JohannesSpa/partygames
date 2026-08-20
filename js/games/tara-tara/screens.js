@@ -846,10 +846,19 @@ PG.taraTara.screens = (function () {
           }
         }),
         ui.button({
-          label: 'Zur Startseite',
+          label: 'Spiel beenden',
           variant: 'ghost',
-          icon: 'home',
-          onClick: function () { PG.confetti.stop(); leaveToHome(); }
+          icon: 'check',
+          onClick: function () {
+            PG.confetti.stop();
+            // Schliesst das Spiel endgueltig ab: der gespeicherte Verlauf
+            // wird verworfen, damit die Startseite nicht dauerhaft die
+            // Siegerehrung zum Fortsetzen anbietet. Das Ergebnis steht zu
+            // diesem Zeitpunkt bereits in der Bestenliste.
+            S.discard();
+            ui.toast('Spiel abgeschlossen', { icon: 'check', variant: 'success' });
+            leaveToHome();
+          }
         })
       )
     );
@@ -863,14 +872,8 @@ PG.taraTara.screens = (function () {
         PG.audio.win();
         PG.haptics.success();
 
-        // Ergebnis genau einmal in die Gesamtstatistik uebernehmen.
-        // Ohne router.refresh, damit die Siegerehrung nicht neu startet.
-        if (!st.recorded) {
-          PG.history.add(S.buildRecord(st), st.groupCode || null);
-          S.store.dispatch({ type: 'markRecorded' });
-          // Frisches Ergebnis gleich in die gemeinsame Bestenliste schieben.
-          PG.sync.autoSync();
-        }
+        // Das Ergebnis ist zu diesem Zeitpunkt bereits erfasst - das
+        // uebernimmt state.js, sobald das Spiel entschieden ist.
       }
     };
   }

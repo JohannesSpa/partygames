@@ -94,6 +94,12 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
 
+    def end_headers(self):
+        # Beim Entwickeln nie zwischenspeichern - sonst laeuft im Browser
+        # weiter die alte Fassung, waehrend die Datei laengst geaendert ist.
+        self.send_header('Cache-Control', 'no-store, must-revalidate')
+        super().end_headers()
+
     def do_GET(self):
         if self.path.split('?')[0] == '/api/sync':
             conn = init_db()
